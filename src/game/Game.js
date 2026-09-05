@@ -40,7 +40,11 @@ export class CanopyGlideGame {
       this.setupRenderer();
     } catch (error) {
       console.error(error);
-      document.querySelector('#webgl-fallback').hidden = false;
+      const message = error instanceof Error ? error.message : String(error);
+      const fallback = document.querySelector('#webgl-fallback');
+      fallback.hidden = false;
+      document.querySelector('#webgl-fallback-message').textContent = 'La tablet sí puede tener WebGL, pero la escena no ha podido iniciarse.';
+      document.querySelector('#webgl-fallback-detail').textContent = `Diagnóstico: ${message}`;
       return;
     }
     this.setupScene();
@@ -49,6 +53,8 @@ export class CanopyGlideGame {
   }
 
   setupRenderer() {
+    let stage = 'crear el contexto WebGL';
+    try {
     // Algunos navegadores de tablet rechazan los atributos avanzados de contexto
     // aunque sí soporten WebGL. Pedimos primero un contexto estándar, como get.webgl.org.
     const canvas = document.createElement('canvas');
@@ -56,7 +62,9 @@ export class CanopyGlideGame {
       || canvas.getContext('webgl')
       || canvas.getContext('experimental-webgl');
     if (!context) throw new Error('No se pudo crear un contexto WebGL.');
+    stage = 'crear el renderizador';
     this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'default' });
+    stage = 'configurar la escena';
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.25 : 1.7));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
@@ -70,6 +78,7 @@ export class CanopyGlideGame {
     this.camera = new THREE.PerspectiveCamera(59, window.innerWidth / window.innerHeight, .1, 320);
     this.camera.position.set(0, 6.8, 33);
 
+    stage = 'configurar los efectos visuales';
     this.composer = new EffectComposer(this.renderer);
     const renderPass = new RenderPass(this.scene, this.camera);
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .37, .55, .7);
@@ -81,6 +90,10 @@ export class CanopyGlideGame {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.input.resetHeld();
     });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`${stage}: ${detail}`);
+    }
   }
 
   setupScene() {
