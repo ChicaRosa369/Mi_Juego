@@ -11,6 +11,8 @@ export class InputController {
     this.jumpHeld = false;
     this.jumpPressed = false;
     this.dashPressed = false;
+    this.spinPressed = false;
+    this.throwPressed = false;
     this.actionPressed = false;
     this.pausePressed = false;
     this.joyPointer = null;
@@ -23,6 +25,8 @@ export class InputController {
     this.lookZone = document.querySelector('#look-zone');
     this.jumpButton = document.querySelector('#jump-button');
     this.dashButton = document.querySelector('#dash-button');
+    this.spinButton = document.querySelector('#spin-button');
+    this.throwButton = document.querySelector('#throw-button');
     this.actionButton = document.querySelector('#action-button');
 
     this.bindKeyboard();
@@ -30,7 +34,7 @@ export class InputController {
   }
 
   bindKeyboard() {
-    const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyF', 'KeyE', 'KeyP']);
+    const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyF', 'KeyQ', 'KeyR', 'KeyE', 'KeyP']);
     window.addEventListener('keydown', (event) => {
       if (movementKeys.has(event.code)) event.preventDefault();
       if (event.repeat) {
@@ -43,6 +47,8 @@ export class InputController {
         this.jumpHeld = true;
       }
       if (event.code === 'KeyF') this.dashPressed = true;
+      if (event.code === 'KeyQ') this.spinPressed = true;
+      if (event.code === 'KeyR') this.throwPressed = true;
       if (event.code === 'KeyE') this.actionPressed = true;
       if (event.code === 'KeyP') this.pausePressed = true;
     }, { passive: false });
@@ -121,6 +127,10 @@ export class InputController {
     buttonRelease(this.jumpButton, () => { this.jumpHeld = false; });
     buttonDown(this.dashButton, () => { this.dashPressed = true; });
     buttonRelease(this.dashButton);
+    buttonDown(this.spinButton, () => { this.spinPressed = true; });
+    buttonRelease(this.spinButton);
+    buttonDown(this.throwButton, () => { this.throwPressed = true; });
+    buttonRelease(this.throwButton);
     buttonDown(this.actionButton, () => { this.actionPressed = true; });
     buttonRelease(this.actionButton);
   }
@@ -184,6 +194,18 @@ export class InputController {
   consumeDashPressed() {
     const result = this.dashPressed;
     this.dashPressed = false;
+    return result;
+  }
+
+  consumeSpinPressed() {
+    const result = this.spinPressed;
+    this.spinPressed = false;
+    return result;
+  }
+
+  consumeThrowPressed() {
+    const result = this.throwPressed;
+    this.throwPressed = false;
     return result;
   }
 

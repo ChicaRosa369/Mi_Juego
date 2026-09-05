@@ -40,6 +40,11 @@ export class Player {
     this.climbing = false;
     this.dashTimer = 0;
     this.dashCooldown = 0;
+    this.spinTimer = 0;
+    this.spinCooldown = 0;
+    this.throwCooldown = 0;
+    this.smallAcorns = 18;
+    this.maxSmallAcorns = 36;
     this.invulnerableTimer = 0;
     this.glideStartTimer = 0;
     this.airTime = 0;
@@ -159,6 +164,19 @@ export class Player {
     scarf.position.set(0, 1.29, -.28);
     scarf.rotation.x = Math.PI / 2;
     this.visual.add(scarf);
+
+    // Aro luminoso del ataque giratorio: aparece solo durante el giro.
+    this.spinAura = new THREE.Group();
+    this.spinAura.position.y = .93;
+    const auraMaterial = new THREE.MeshBasicMaterial({ color: '#bdf5a0', transparent: true, opacity: .78, depthWrite: false, blending: THREE.AdditiveBlending });
+    const auraOuter = new THREE.Mesh(new THREE.TorusGeometry(1.08, .055, 5, 18), auraMaterial);
+    auraOuter.rotation.x = Math.PI / 2;
+    const auraInner = new THREE.Mesh(new THREE.TorusGeometry(.68, .04, 5, 14), auraMaterial.clone());
+    auraInner.rotation.x = Math.PI / 2;
+    auraInner.rotation.z = .65;
+    this.spinAura.add(auraOuter, auraInner);
+    this.spinAura.visible = false;
+    this.group.add(this.spinAura);
   }
 
   setCheckpoint(position) {
@@ -171,6 +189,41 @@ export class Player {
 
   getDashActive() {
     return this.dashTimer > 0;
+  }
+
+  getSpinActive() {
+    return this.spinTimer > 0;
+  }
+
+  addSmallAcorns(amount) {
+    this.smallAcorns = Math.min(this.maxSmallAcorns, this.smallAcorns + amount);
+    return this.smallAcorns;
+  }
+
+  spin() {
+    if (this.spinCooldown > 0 || this.dashTimer > 0 || this.climbing) return false;
+    this.spinTimer = .48;
+    this.spinCooldown = .72;
+    this.gliding = false;
+    this.callbacks.onEvent?.('spin');
+    return true;
+  }
+
+  throwAcorn(direction = this.direction) {
+    if (this.throwCooldown > 0) return false;
+    if (this.smallAcorns <= 0) {
+      this.callbacks.onEmptyAmmo?.();
+      return false;
+    }
+    this.smallAcorns -= 1;
+    this.throwCooldown = .22;
+    const throwDirection = direction.clone().setY(0);
+    if (throwDirection.lengthSq() < .001) throwDirection.copy(this.direction);
+    throwDirection.normalize();
+    const origin = this.position.clone().add(new THREE.Vector3(0, 1.08, 0)).addScaledVector(throwDirection, .66);
+    this.callbacks.onThrow?.(origin, throwDirection);
+    this.callbacks.onEvent?.('throw');
+    return true;
   }
 
   jump() {
@@ -227,6 +280,7 @@ export class Player {
     this.gliding = false;
     this.climbing = false;
     this.dashTimer = 0;
+    this.spinTimer = 0;
     this.stamina = 100;
     this.invulnerableTimer = 1.6;
     if (restoreHealth) this.health = 3;
@@ -238,6 +292,9 @@ export class Player {
     this.invulnerableTimer = Math.max(0, this.invulnerableTimer - delta);
     this.dashTimer = Math.max(0, this.dashTimer - delta);
     this.dashCooldown = Math.max(0, this.dashCooldown - delta);
+    this.spinTimer = Math.max(0, this.spinTimer - delta);
+    this.spinCooldown = Math.max(0, this.spinCooldown - delta);
+    this.throwCooldown = Math.max(0, this.throwCooldown - delta);
     this.airTime = this.grounded ? 0 : this.airTime + delta;
 
     const cameraForward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
@@ -249,13 +306,15 @@ export class Player {
 
     if (input.consumeJumpPressed() && this.grounded) this.jump();
     if (input.consumeDashPressed()) this.dash();
+    if (input.consumeSpinPressed()) this.spin();
+    if (input.consumeThrowPressed()) this.throwAcorn(this.desiredDirection.lengthSq() > .01 ? this.desiredDirection : cameraForward);
 
     const climbable = world.getClimbable(this.position);
     const tryingToClimb = climbable && this.desiredDirection.lengthSq() > .03 && this.dashTimer <= 0 && (input.jumpHeld || !this.grounded || input.move.y > .15) && this.position.y < climbable.top - .25;
     this.climbing = Boolean(tryingToClimb && !this.gliding);
 
     let thermal = null;
-    const canGlide = !this.grounded && !this.climbing && this.dashTimer <= 0 && input.jumpHeld && this.stamina > .1 && this.velocity.y < 4.2;
+    const canGlide = !this.grounded && !this.climbing && this.dashTimer <= 0 && this.spinTimer <= 0 && input.jumpHeld && this.stamina > .1 && this.velocity.y < 4.2;
     if (canGlide) {
       thermal = world.getThermal(this.position);
       if (!this.gliding) this.callbacks.onEvent?.('glide');
@@ -333,6 +392,17 @@ export class Player {
     const moving = Math.min(1, Math.hypot(this.velocity.x, this.velocity.z) / 7);
     const bob = this.grounded ? Math.sin(this.modelTime * 12) * .045 * moving : 0;
     this.visual.position.y = .02 + bob;
+    if (this.spinTimer > 0) {
+      this.visual.rotation.y += delta * 33;
+      this.spinAura.visible = true;
+      this.spinAura.rotation.y += delta * 20;
+      this.spinAura.rotation.z += delta * 9;
+      const pulse = 1 + Math.sin(this.spinTimer * 26) * .14;
+      this.spinAura.scale.setScalar(pulse);
+    } else {
+      this.visual.rotation.y = dampAngle(this.visual.rotation.y, 0, 18, delta);
+      this.spinAura.visible = false;
+    }
     this.body.rotation.x = -.22 + (this.gliding ? .24 : 0) + (this.dashTimer > 0 ? .45 : 0);
     this.head.rotation.x = this.gliding ? -.08 : Math.sin(this.modelTime * 3) * .025;
     const stride = Math.sin(this.modelTime * 12) * moving;

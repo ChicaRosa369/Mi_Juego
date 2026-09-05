@@ -27,6 +27,7 @@ export class CanopyGlideGame {
     this.didTeachGlide = false;
     this.didTeachThermal = false;
     this.didTeachDash = false;
+    this.didTeachSpin = false;
     this.cameraYaw = 0;
     this.cameraPitch = .22;
     this.isTouchDevice = window.matchMedia?.('(pointer: coarse)').matches ?? false;
@@ -65,13 +66,13 @@ export class CanopyGlideGame {
     stage = 'crear el renderizador';
     this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'default' });
     stage = 'configurar la escena';
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.25 : 1.7));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.3 : 1.75));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.16;
+    this.renderer.toneMappingExposure = 1.19;
     this.container.append(this.renderer.domElement);
     this.input.bindDesktopLook(this.renderer.domElement);
 
@@ -81,7 +82,7 @@ export class CanopyGlideGame {
     stage = 'configurar los efectos visuales';
     this.composer = new EffectComposer(this.renderer);
     const renderPass = new RenderPass(this.scene, this.camera);
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .37, .55, .7);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .42, .55, .7);
     this.composer.addPass(renderPass);
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(new OutputPass());
@@ -97,7 +98,8 @@ export class CanopyGlideGame {
   }
 
   setupScene() {
-    this.scene.fog = new THREE.FogExp2('#396c53', .015);
+    // Una ligera mayor visibilidad y brillo conservan el estilo cartoon sin cargar la tablet.
+    this.scene.fog = new THREE.FogExp2('#396c53', .0138);
 
     const hemisphere = new THREE.HemisphereLight('#c6f4cf', '#143b2d', 2.2);
     this.scene.add(hemisphere);
@@ -136,12 +138,19 @@ export class CanopyGlideGame {
           this.hud.toast('Corriente térmica: mantén PLANEAR para ganar altura.', '');
         }
       },
+      onThrow: (origin, direction) => {
+        this.enemies?.throwAcorn(origin, direction);
+      },
+      onEmptyAmmo: () => this.hud.toast('No quedan bellotas pequeñas. Busca racimos marrones por el dosel.', 'danger'),
     });
 
     this.enemies = new EnemySystem(this.scene, this.world, {
       onEnemyDown: (type) => {
         this.sound.enemyDown();
         this.hud.toast(type === 'heavy' ? '¡Escudo roto! Mapache pesado derrotado.' : 'Vigía mapache derrotado.');
+      },
+      onEnemyHurt: (type, health) => {
+        if (type === 'heavy' && health > 0) this.hud.toast('El escudo del pesado se ha agrietado: un golpe más.', 'seed');
       },
       onLookoutShot: () => {},
       onBossAwake: () => {
@@ -174,6 +183,7 @@ export class CanopyGlideGame {
     this.hud.begin();
     this.hud.setHealth(this.player.health);
     this.hud.setSeeds(0);
+    this.hud.setAmmo(this.player.smallAcorns);
     this.hud.setStamina(this.player.stamina);
     this.hud.setObjective('Sigue el brillo dorado hasta la Bellota Solar del Alba.');
     this.hud.toast('Expedición iniciada. Las corrientes turquesas levantan el vuelo.', '');
@@ -195,6 +205,14 @@ export class CanopyGlideGame {
         this.hud.toast('Ataque en picado: úsalo desde el aire contra escudos y motores.', '');
       }
     }
+    if (event === 'spin') {
+      this.sound.spin();
+      if (!this.didTeachSpin) {
+        this.didTeachSpin = true;
+        this.hud.toast('Giro de bellota: despeja a los mapaches cercanos.', '');
+      }
+    }
+    if (event === 'throw') this.sound.throw();
     if (event === 'hurt') this.sound.hit();
   }
 
@@ -207,7 +225,7 @@ export class CanopyGlideGame {
   }
 
   collectWorldItems() {
-    const { seeds, fruits } = this.world.collectAt(this.player.position);
+    const { seeds, fruits, ammoPacks } = this.world.collectAt(this.player.position);
     for (const seed of seeds) {
       this.seeds += 1;
       this.player.setCheckpoint(seed.checkpoint);
@@ -218,6 +236,12 @@ export class CanopyGlideGame {
     }
     if (seeds.length > 0 && this.seeds === 3) {
       this.hud.toast('Las tres bellotas resuenan. ¡La fortaleza del Rey está abierta!', 'seed');
+    }
+    for (const pack of ammoPacks) {
+      this.player.addSmallAcorns(pack.amount);
+      this.hud.setAmmo(this.player.smallAcorns);
+      this.hud.toast(`Racimo de bellotas pequeñas · +${pack.amount}`, 'seed');
+      this.sound.collect();
     }
     for (const fruit of fruits) {
       this.player.stamina = Math.min(100, this.player.stamina + 34);
@@ -295,6 +319,7 @@ export class CanopyGlideGame {
     if (atAltar && action) this.finishAdventure();
 
     this.hud.setStamina(this.player.stamina);
+    this.hud.setAmmo(this.player.smallAcorns);
     this.hud.setZone(this.player.position.y);
     this.objectiveTick -= delta;
     if (this.objectiveTick <= 0) {
@@ -319,7 +344,7 @@ export class CanopyGlideGame {
     const height = window.innerHeight;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.25 : 1.7));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.3 : 1.75));
     this.renderer.setSize(width, height);
     this.composer?.setSize(width, height);
   }

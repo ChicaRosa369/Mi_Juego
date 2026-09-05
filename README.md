@@ -30,6 +30,8 @@ npm run preview
 | Mirar la cámara orbital | Arrastrar sobre la escena | Deslizar en la parte derecha libre |
 | Saltar / desplegar patagios | Mantener `Espacio` en el aire | Mantener **SALTAR / PLANEAR** |
 | Glide Dash / ataque en picado | `F` | **PICADO** |
+| Giro de bellota de corto alcance | `Q` | **GIRO** |
+| Lanzar una Bellota Pequeña hacia la cámara | `R` | **LANZAR** |
 | Activar el altar | `E` | **ACTIVAR** |
 | Ayuda | `P` | Botón `?` superior derecho |
 
@@ -39,12 +41,12 @@ npm run preview
 
 - Ardilla voladora low-poly con carrera, salto, escalada automática en troncos, patagios animados, inercia de vuelo, resistencia y Glide Dash.
 - Corrientes térmicas verticales que impulsan el planeo hacia el dosel alto.
-- Mundo vertical en tres estratos: suelo, dosel medio y copa alta; incluye agua animada, lianas, puentes, secuoyas, islas de madera y fortaleza suspendida.
-- Tres **Bellotas Solares** coleccionables y frutos que recuperan resistencia.
+- Mundo vertical en tres estratos: suelo, dosel medio y copa alta; una ruta extendida de plataformas, lianas, puentes, térmicas, desvíos y una fortaleza mucho más lejana.
+- Tres **Bellotas Solares** coleccionables (los objetivos de misión), frutos que recuperan resistencia y racimos de **Bellotas Pequeñas** que rellenan la munición.
 - Vigías mapache que disparan con tirachinas, mapaches pesados protegidos por escudo y el Rey Mapache en su robot de chatarra.
-- El jefe y los mapaches pesados requieren ataques aéreos descendentes.
+- Combate accesible: el giro estilo arcade derrota vigías cercanos, las Bellotas Pequeñas hacen daño a distancia y un Glide Dash sigue siendo el golpe eficaz para el motor del jefe.
 - Cámara de tercera persona suavizada con brazo elástico y detección de obstáculos.
-- HUD con 3 corazones, contador de bellotas, resistencia de planeo, altitud/zona, avisos de misión, barra de jefe e interacción contextual.
+- HUD con 3 corazones, contadores separados de Bellotas Solares y munición, resistencia de planeo, altitud/zona, avisos de misión, barra de jefe e interacción contextual.
 - Condición de victoria: recuperar las tres bellotas, destruir el motor del Rey Mapache y activar el altar del Gran Árbol.
 
 ## Arquitectura

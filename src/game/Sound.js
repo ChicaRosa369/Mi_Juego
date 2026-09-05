@@ -61,6 +61,8 @@ export class Soundscape {
   }
   fruit() { this.tone(430, .09, { type: 'triangle', volume: .08, endFrequency: 600 }); }
   dash() { this.noise(.09, .08, 1500); this.tone(140, .17, { type: 'sawtooth', volume: .07, endFrequency: 70 }); }
+  spin() { this.noise(.11, .075, 2200); this.tone(245, .24, { type: 'sawtooth', volume: .075, endFrequency: 540 }); }
+  throw() { this.tone(375, .075, { type: 'triangle', volume: .07, endFrequency: 295 }); }
   hit() { this.noise(.14, .12, 650); this.tone(130, .22, { type: 'square', volume: .06, endFrequency: 76 }); }
   enemyDown() { this.tone(190, .12, { type: 'square', volume: .07, endFrequency: 105 }); this.tone(520, .16, { type: 'triangle', volume: .08, endFrequency: 300 }); }
   bossHit() { this.tone(100, .18, { type: 'sawtooth', volume: .12, endFrequency: 45 }); }

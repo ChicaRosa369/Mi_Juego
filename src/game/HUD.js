@@ -4,6 +4,7 @@ export class HUD {
     this.hearts = [...document.querySelectorAll('.heart')];
     this.seedCount = document.querySelector('#seed-count');
     this.seedPips = [...document.querySelectorAll('#seed-pips i')];
+    this.ammoCount = document.querySelector('#ammo-count');
     this.staminaFill = document.querySelector('#stamina-fill');
     this.staminaNumber = document.querySelector('#stamina-number');
     this.objectiveText = document.querySelector('#objective-text');
@@ -49,6 +50,10 @@ export class HUD {
   setSeeds(count) {
     this.seedCount.innerHTML = `${count} <em>/</em> 3`;
     this.seedPips.forEach((pip, index) => pip.classList.toggle('active', index < count));
+  }
+
+  setAmmo(amount) {
+    this.ammoCount.textContent = String(Math.max(0, amount));
   }
 
   setStamina(value) {

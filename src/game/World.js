@@ -44,6 +44,7 @@ export class World {
     this.thermals = [];
     this.collectibles = [];
     this.fruits = [];
+    this.ammoPacks = [];
     this.animated = [];
     this.occluders = [];
     this.altar = null;
@@ -114,7 +115,7 @@ export class World {
     sun.scale.set(38, 38, 1);
     this.scene.add(sun);
 
-    for (let index = 0; index < 11; index += 1) {
+    for (let index = 0; index < 13; index += 1) {
       const cloud = new THREE.Group();
       const cloudMaterial = new THREE.MeshBasicMaterial({ color: index % 2 ? '#d7edb5' : '#e8f1c0', transparent: true, opacity: .2, depthWrite: false });
       for (let puff = 0; puff < 4; puff += 1) {
@@ -302,7 +303,7 @@ export class World {
     group.add(turf);
 
     const rockGeometry = new THREE.DodecahedronGeometry(.55, 0);
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       const decoration = new THREE.Mesh(index % 3 ? rockGeometry : new THREE.ConeGeometry(.35, 1.0, 5), index % 3 ? this.materials.stoneLight : this.materials.leafLight);
       decoration.position.set((seeded(index + x) - .5) * width * .78, top + (index % 3 ? .18 : .43), (seeded(index + z + 99) - .5) * depth * .78);
       decoration.scale.setScalar(.6 + seeded(index + x + z) * .6);
@@ -318,36 +319,75 @@ export class World {
   }
 
   createPlatforms() {
-    this.addPlatform({ x: 10, z: 12, top: 7.2, width: 15, depth: 10, name: 'Nido del Alba', floating: true });
-    this.addPlatform({ x: -15, z: -8, top: 17.5, width: 15, depth: 11, name: 'Puente de Lianas', floating: true });
-    this.addPlatform({ x: 11, z: -34, top: 28.8, width: 16, depth: 11, name: 'Copa del Viento', floating: true });
-    this.addPlatform({ x: 0, z: -62, top: 39.5, width: 31, depth: 25, style: 'wood', name: 'Fortaleza de Chatarra', floating: true });
+    // Ruta baja: varias islas cercanas convierten el arranque en un pequeño circuito de práctica.
+    const lowerCanopy = [
+      { x: -7, z: 19, top: 2.7, width: 9, depth: 7, name: 'Raíces del Arroyo' },
+      { x: 1, z: 16, top: 4.7, width: 10, depth: 7, name: 'Mirador de Musgo' },
+      { x: 16, z: 16, top: 6.2, width: 9, depth: 7, name: 'Rama del Sol' },
+      { x: 10, z: 12, top: 7.2, width: 15, depth: 10, name: 'Nido del Alba' },
+      { x: 19, z: 8, top: 9.6, width: 8, depth: 7, name: 'Percha del Vigía', style: 'wood' },
+      { x: 8, z: 4, top: 11.5, width: 10, depth: 7, name: 'Cruce de Lianas' },
+      { x: -2, z: 0, top: 13.4, width: 9, depth: 7, name: 'Balcón Esmeralda' },
+      { x: -10, z: -3, top: 15.4, width: 10, depth: 7, name: 'Paso del Colibrí' },
+      { x: -15, z: -8, top: 17.5, width: 15, depth: 11, name: 'Puente de Lianas' },
+    ];
+    const middleCanopy = [
+      { x: -24, z: -10, top: 19.3, width: 8, depth: 7, name: 'Nido del Viento' },
+      { x: -23, z: -18, top: 21.5, width: 9, depth: 7, name: 'Rama de Ámbar' },
+      { x: -14, z: -21, top: 23.7, width: 9, depth: 7, name: 'Terraza de Helechos' },
+      { x: -5, z: -20, top: 25.4, width: 10, depth: 7, name: 'Cruce de la Brisa' },
+      { x: 3, z: -27, top: 27.2, width: 9, depth: 7, name: 'Isla de los Vientos' },
+      { x: 11, z: -34, top: 28.8, width: 16, depth: 11, name: 'Copa del Viento' },
+      { x: 21, z: -37, top: 30.9, width: 8, depth: 7, name: 'Rama del Halcón' },
+      { x: 18, z: -45, top: 33.2, width: 9, depth: 7, name: 'Nudo de Lianas' },
+    ];
+    const highCanopy = [
+      { x: 9, z: -50, top: 35.8, width: 10, depth: 8, name: 'Cresta de Niebla' },
+      { x: 3, z: -54, top: 38.3, width: 10, depth: 8, name: 'Puente de las Nubes', style: 'wood' },
+      { x: -4, z: -62, top: 41.2, width: 11, depth: 8, name: 'Atalaya de la Copa' },
+      { x: -3, z: -70, top: 43.7, width: 10, depth: 8, name: 'Rama del Trueno' },
+      { x: 6, z: -78, top: 47.4, width: 12, depth: 9, name: 'Antesala de la Fortaleza', style: 'wood' },
+      { x: 0, z: -92, top: 50.5, width: 31, depth: 25, style: 'wood', name: 'Fortaleza de Chatarra' },
+    ];
+    [...lowerCanopy, ...middleCanopy, ...highCanopy].forEach((platform) => this.addPlatform({ ...platform, floating: true }));
 
+    // Plataformas laterales para exploración y vigías, además de la ruta principal.
     this.addPlatform({ x: 24, z: 2, top: 5.8, width: 6, depth: 6, style: 'wood', name: 'Torre Vigía', floating: true });
     this.addPlatform({ x: -28, z: -20, top: 13.8, width: 6, depth: 6, style: 'wood', name: 'Torre Vigía', floating: true });
+    this.addPlatform({ x: 26, z: -49, top: 34.7, width: 7, depth: 7, style: 'wood', name: 'Torre Vigía', floating: true });
+    this.addPlatform({ x: -18, z: -34, top: 27.1, width: 8, depth: 7, name: 'Rama Escondida', floating: true });
 
     const bridgePoints = [
-      [new THREE.Vector3(3, 5.8, 12), new THREE.Vector3(9, 7.0, 12)],
-      [new THREE.Vector3(5, 8.2, 6), new THREE.Vector3(-10, 16.8, -4)],
-      [new THREE.Vector3(-8, 18.0, -11), new THREE.Vector3(4, 27.8, -29)],
-      [new THREE.Vector3(11, 29.0, -38), new THREE.Vector3(3, 38.6, -52)],
+      [new THREE.Vector3(-4, 3.0, 19), new THREE.Vector3(0, 4.5, 16)],
+      [new THREE.Vector3(5, 5.2, 16), new THREE.Vector3(9, 7.0, 13)],
+      [new THREE.Vector3(14, 8.2, 10), new THREE.Vector3(10, 11.2, 5)],
+      [new THREE.Vector3(5, 12.2, 4), new THREE.Vector3(-1, 13.2, 0)],
+      [new THREE.Vector3(-5, 14.0, -1), new THREE.Vector3(-11, 16.9, -6)],
+      [new THREE.Vector3(-13, 18.1, -12), new THREE.Vector3(-20, 21.0, -17)],
+      [new THREE.Vector3(-18, 22.0, -20), new THREE.Vector3(-7, 25.0, -20)],
+      [new THREE.Vector3(-2, 26.0, -22), new THREE.Vector3(6, 28.2, -31)],
+      [new THREE.Vector3(11, 29.2, -38), new THREE.Vector3(5, 37.7, -51)],
+      [new THREE.Vector3(2, 39.0, -56), new THREE.Vector3(-3, 40.8, -61)],
+      [new THREE.Vector3(-4, 42.0, -65), new THREE.Vector3(-2, 43.3, -70)],
+      [new THREE.Vector3(0, 45.0, -73), new THREE.Vector3(5, 47.0, -78)],
+      [new THREE.Vector3(4, 48.0, -82), new THREE.Vector3(1, 50.1, -86)],
     ];
     bridgePoints.forEach(([a, b], index) => {
-      const log = cylinderBetween(a, b, .45, .62, this.materials.barkLight, 8);
+      const log = cylinderBetween(a, b, .38, .57, this.materials.barkLight, 8);
       this.scene.add(log);
-      for (let knot = 0; knot < 5; knot += 1) {
-        const t = (knot + 1) / 6;
-        const p = a.clone().lerp(b, t);
-        const vine = new THREE.Mesh(new THREE.TorusGeometry(.42, .07, 5, 9), this.materials.vine);
-        vine.position.copy(p);
+      for (let knot = 0; knot < 4; knot += 1) {
+        const t = (knot + 1) / 5;
+        const point = a.clone().lerp(b, t);
+        const vine = new THREE.Mesh(new THREE.TorusGeometry(.38, .06, 5, 9), this.materials.vine);
+        vine.position.copy(point);
         vine.rotation.x = Math.PI / 2;
         this.scene.add(vine);
       }
       this.animated.push({ type: 'bridge', object: log, phase: index });
     });
 
-    // Lianas verticales que señalan las rutas de escalada.
-    [[4, 7, 10], [-10, 10, -4], [5, 18, -27], [0, 30, -52]].forEach(([x, y, z], index) => {
+    // Lianas verticales señalan la subida entre cada bioma.
+    [[4, 7, 10], [-10, 10, -4], [5, 18, -27], [4, 29, -47], [-2, 40, -65], [3, 46, -78]].forEach(([x, y, z], index) => {
       const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(x, y - 7, z), new THREE.Vector3(x + (index % 2 ? .7 : -.7), y - 3.5, z + .4), new THREE.Vector3(x, y + 1, z),
       ]);
@@ -362,7 +402,9 @@ export class World {
       { x: 2, z: 11, bottom: .1, top: 13, radius: 4.4, strength: 19 },
       { x: -7, z: -5, bottom: 1, top: 25, radius: 4.8, strength: 21 },
       { x: 4, z: -27, bottom: 8, top: 36, radius: 5.0, strength: 23 },
-      { x: 1, z: -51, bottom: 17, top: 47, radius: 5.1, strength: 25 },
+      { x: 3, z: -52, bottom: 20, top: 46, radius: 5.3, strength: 24 },
+      { x: 1, z: -77, bottom: 34, top: 59, radius: 5.4, strength: 26 },
+      { x: 21, z: -42, bottom: 23, top: 39, radius: 4.2, strength: 20 },
     ];
     thermalData.forEach((data, index) => this.addThermal(data, index));
   }
@@ -401,9 +443,15 @@ export class World {
     seeds.forEach((seed, index) => this.addSolarSeed(seed, index));
 
     const fruitData = [
-      [4, 1.2, 18], [13, 8.8, 8], [17, 8.5, 14], [-9, 18.8, -3], [-20, 18.8, -10], [-14, 19, -14], [5, 30, -30], [15, 30, -36], [2, 40.8, -54], [-9, 40.8, -61], [12, 40.8, -65],
+      [4, 1.2, 18], [-7, 3.9, 19], [2, 5.9, 16], [16, 7.4, 14], [13, 8.8, 8], [7, 12.8, 4], [-9, 16.9, -3], [-20, 20.8, -10], [-14, 25.2, -14], [-5, 27.0, -20], [5, 30, -30], [15, 30, -36], [19, 34.8, -45], [4, 39.8, -53], [-4, 42.8, -62], [-3, 45.4, -70], [6, 49.0, -78], [2, 52.0, -87],
     ];
     fruitData.forEach(([x, y, z], index) => this.addFruit(x, y, z, index));
+
+    // Los racimos marrones son munición; no cuentan como Bellotas Solares.
+    const ammoData = [
+      [-6, 3.7, 20], [3, 5.8, 17], [16, 7.4, 15], [19, 10.8, 8], [7, 12.8, 3], [-10, 16.9, -4], [-23, 20.6, -18], [-14, 25.2, -21], [3, 28.8, -27], [19, 32.7, -38], [17, 35.0, -45], [4, 40.2, -54], [-4, 43.2, -62], [-2, 45.6, -70], [6, 49.4, -78], [0, 52.0, -84],
+    ];
+    ammoData.forEach(([x, y, z], index) => this.addAmmoPack(x, y, z, index, 5));
   }
 
   addSolarSeed(data, index) {
@@ -454,6 +502,32 @@ export class World {
     this.fruits.push({ group, position: group.position, collected: false, baseY: y, phase: index * .8 });
   }
 
+  addAmmoPack(x, y, z, index, amount = 5) {
+    const group = new THREE.Group();
+    const shellMaterial = new THREE.MeshStandardMaterial({ color: '#9b592d', roughness: .86, flatShading: true });
+    const capMaterial = new THREE.MeshStandardMaterial({ color: '#d59647', roughness: .8, flatShading: true });
+    for (let acornIndex = 0; acornIndex < 3; acornIndex += 1) {
+      const acorn = new THREE.Group();
+      const nut = new THREE.Mesh(new THREE.SphereGeometry(.22, 6, 5), shellMaterial);
+      nut.scale.y = 1.22;
+      nut.castShadow = true;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(.235, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2), capMaterial);
+      cap.position.y = .15;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(.028, .045, .14, 4), this.materials.leafLight);
+      stem.position.y = .33;
+      acorn.add(nut, cap, stem);
+      acorn.position.set((acornIndex - 1) * .34, Math.abs(acornIndex - 1) * .05, (acornIndex % 2) * .23);
+      acorn.rotation.set(0, index * .7 + acornIndex, (acornIndex - 1) * .28);
+      group.add(acorn);
+    }
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture, color: '#ffbf59', transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.set(2.1, 2.1, 1);
+    group.add(halo);
+    group.position.set(x, y, z);
+    this.scene.add(group);
+    this.ammoPacks.push({ group, position: group.position, amount, collected: false, baseY: y, phase: index * .61 });
+  }
+
   createAltar() {
     const y = this.terrainHeight(0, 15) + .18;
     const group = new THREE.Group();
@@ -491,7 +565,7 @@ export class World {
 
   createFortress() {
     const group = new THREE.Group();
-    const deckY = 40.05;
+    const deckY = 51.05;
     const junkMaterials = [this.materials.wood, this.materials.barkLight, this.materials.stone];
     for (let index = 0; index < 18; index += 1) {
       const junk = new THREE.Mesh(index % 3 ? new THREE.BoxGeometry(1.2, 1.2, .8) : new THREE.CylinderGeometry(.5, .65, 1.8, 7), junkMaterials[index % junkMaterials.length]);
@@ -517,12 +591,13 @@ export class World {
     gate.position.set(0, deckY + 2, -10.5);
     gate.castShadow = true;
     group.add(gate);
-    group.position.set(0, 0, -62);
+    group.position.set(0, 0, -92);
     this.scene.add(group);
   }
 
   createAmbientLife() {
-    const count = 130;
+    // Detalle ambiental moderado: unas luciérnagas extra ayudan a leer la ruta nocturna sin geometría pesada.
+    const count = 150;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const color = new THREE.Color();
@@ -568,7 +643,7 @@ export class World {
     }
 
     const mistMaterial = new THREE.SpriteMaterial({ map: this.mistTexture, transparent: true, opacity: .4, depthWrite: false, color: '#d7ffb5' });
-    for (let index = 0; index < 13; index += 1) {
+    for (let index = 0; index < 16; index += 1) {
       const mist = new THREE.Sprite(mistMaterial.clone());
       mist.position.set((seeded(index + 230) - .5) * 92, 7 + seeded(index + 270) * 28, -5 + (seeded(index + 310) - .5) * 108);
       const size = 12 + seeded(index + 330) * 18;
@@ -628,6 +703,7 @@ export class World {
   collectAt(position) {
     const seeds = [];
     const fruits = [];
+    const ammoPacks = [];
     for (const seed of this.collectibles) {
       if (!seed.collected && position.distanceTo(seed.group.position) < 2.05) {
         seed.collected = true;
@@ -642,7 +718,14 @@ export class World {
         fruits.push(fruit);
       }
     }
-    return { seeds, fruits };
+    for (const pack of this.ammoPacks) {
+      if (!pack.collected && position.distanceTo(pack.position) < 1.65) {
+        pack.collected = true;
+        pack.group.visible = false;
+        ammoPacks.push(pack);
+      }
+    }
+    return { seeds, fruits, ammoPacks };
   }
 
   updateAltarSeeds(amount) {
@@ -690,6 +773,12 @@ export class World {
       if (!fruit.collected) {
         fruit.group.rotation.y += delta * 1.8;
         fruit.group.position.y = fruit.baseY + Math.sin(elapsed * 2.5 + fruit.phase) * .12;
+      }
+    }
+    for (const pack of this.ammoPacks) {
+      if (!pack.collected) {
+        pack.group.rotation.y += delta * 1.45;
+        pack.group.position.y = pack.baseY + Math.sin(elapsed * 2.2 + pack.phase) * .1;
       }
     }
     for (const item of this.animated) {

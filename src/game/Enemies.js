@@ -20,6 +20,7 @@ export class EnemySystem {
     this.callbacks = callbacks;
     this.enemies = [];
     this.projectiles = [];
+    this.friendlyProjectiles = [];
     this.effects = [];
     this.defeated = 0;
     this.time = 0;
@@ -38,12 +39,15 @@ export class EnemySystem {
   }
 
   buildEncounters() {
-    this.addEnemy('lookout', new THREE.Vector3(24, 6.05, 2), new THREE.Vector3(24, 6.05, 2));
-    this.addEnemy('lookout', new THREE.Vector3(-28, 14.05, -20), new THREE.Vector3(-28, 14.05, -20));
-    this.addEnemy('lookout', new THREE.Vector3(15, 30.0, -36), new THREE.Vector3(15, 30.0, -36));
-    this.addEnemy('heavy', new THREE.Vector3(12.8, 7.9, 11), new THREE.Vector3(12.8, 7.9, 11));
-    this.addEnemy('heavy', new THREE.Vector3(-12.5, 18.2, -7), new THREE.Vector3(-12.5, 18.2, -7));
-    this.addEnemy('heavy', new THREE.Vector3(7, 29.6, -31), new THREE.Vector3(7, 29.6, -31));
+    // Patrullas distribuidas por la ruta extendida del dosel.
+    [
+      [24, 6.05, 2], [18, 10.2, 8], [-28, 14.05, -20], [-23, 22.4, -18],
+      [15, 30.0, -36], [26, 35.2, -49], [-3, 44.5, -70],
+    ].forEach(([x, y, z]) => this.addEnemy('lookout', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
+    [
+      [12.8, 7.9, 11], [-12.5, 18.2, -7], [7, 29.6, -31],
+      [4, 39.1, -53], [-3, 44.5, -70], [5, 48.4, -78],
+    ].forEach(([x, y, z]) => this.addEnemy('heavy', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
     this.createBoss();
   }
 
@@ -151,7 +155,8 @@ export class EnemySystem {
       home: home.clone(),
       model,
       alive: true,
-      health: type === 'heavy' ? 1 : 1,
+      health: type === 'heavy' ? 2 : 1,
+      maxHealth: type === 'heavy' ? 2 : 1,
       cooldown: 1.2 + Math.random(),
       hitCooldown: 0,
       patrolPhase: Math.random() * Math.PI * 2,
@@ -240,7 +245,7 @@ export class EnemySystem {
     const warning = new THREE.PointLight('#ff663f', 1.3, 10, 2);
     warning.position.set(0, 3.5, 1);
     root.add(warning);
-    root.position.set(0, 39.5, -62);
+    root.position.set(0, 50.5, -92);
     this.scene.add(root);
     this.boss = {
       root,
@@ -270,13 +275,40 @@ export class EnemySystem {
     this.projectiles.push({ mesh: projectile, velocity: direction.multiplyScalar(type === 'boss' ? 16 : 13), life: 3.3, type });
   }
 
-  kill(enemy, player) {
+  kill(enemy, player = null, bounce = false) {
     enemy.alive = false;
     enemy.model.root.visible = false;
     this.defeated += 1;
     this.burst(enemy.position.clone().add(new THREE.Vector3(0, .9, 0)), enemy.type === 'heavy' ? '#ffb451' : '#b6f17d', 10);
-    player.bounce();
+    if (bounce && player) player.bounce();
     this.callbacks.onEnemyDown?.(enemy.type, this.defeated);
+  }
+
+  damageEnemy(enemy, player = null, attack = 'spin') {
+    if (!enemy.alive || enemy.hitCooldown > 0) return false;
+    enemy.hitCooldown = attack === 'dash' ? .55 : .38;
+    enemy.health -= attack === 'dash' ? 2 : 1;
+    this.burst(enemy.position.clone().add(new THREE.Vector3(0, .9, 0)), attack === 'acorn' ? '#ffd16b' : '#b8f59f', 6);
+    if (enemy.health <= 0) {
+      this.kill(enemy, player, attack === 'dash');
+    } else {
+      if (enemy.model.shield) enemy.model.shield.rotation.z += .7;
+      this.callbacks.onEnemyHurt?.(enemy.type, enemy.health, enemy.maxHealth, attack);
+    }
+    return true;
+  }
+
+  throwAcorn(origin, direction) {
+    const mesh = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(.19, 0),
+      new THREE.MeshStandardMaterial({ color: '#bc6b31', roughness: .76, flatShading: true }),
+    );
+    mesh.position.copy(origin);
+    mesh.castShadow = true;
+    this.scene.add(mesh);
+    const velocity = direction.clone().normalize().multiplyScalar(20);
+    velocity.y += 1.2;
+    this.friendlyProjectiles.push({ mesh, velocity, life: 1.65 });
   }
 
   damageBoss(player) {
@@ -321,7 +353,12 @@ export class EnemySystem {
       const model = enemy.model;
 
       if (distance < 2.05 && verticalDistance < 2.1 && player.getDashActive() && player.velocity.y < -3.5 && enemy.hitCooldown <= 0) {
-        this.kill(enemy, player);
+        this.damageEnemy(enemy, player, 'dash');
+        continue;
+      }
+      if (distance < 2.85 && verticalDistance < 2.15 && player.getSpinActive()) {
+        if (enemy.hitCooldown <= 0) this.damageEnemy(enemy, player, 'spin');
+        // El aura también bloquea el contacto mientras el enemigo se recupera del golpe.
         continue;
       }
       if (distance < (enemy.type === 'heavy' ? 1.65 : 1.15) && verticalDistance < 1.6) player.damage(1, enemy.position);
@@ -362,6 +399,7 @@ export class EnemySystem {
 
     this.updateBoss(delta, player, solarSeeds);
     this.updateProjectiles(delta, player);
+    this.updateFriendlyProjectiles(delta);
     this.updateEffects(delta);
   }
 
@@ -395,7 +433,34 @@ export class EnemySystem {
     } else if (boss.collapse > 0) {
       boss.collapse -= delta;
       boss.root.rotation.z += delta * .52;
-      boss.root.position.y = Math.max(39.5, boss.root.position.y - delta * 2.7);
+      boss.root.position.y = Math.max(50.5, boss.root.position.y - delta * 2.7);
+    }
+  }
+
+  updateFriendlyProjectiles(delta) {
+    for (let index = this.friendlyProjectiles.length - 1; index >= 0; index -= 1) {
+      const projectile = this.friendlyProjectiles[index];
+      projectile.life -= delta;
+      projectile.velocity.y -= 3.8 * delta;
+      projectile.mesh.position.addScaledVector(projectile.velocity, delta);
+      projectile.mesh.rotation.x += delta * 15;
+      projectile.mesh.rotation.z += delta * 11;
+      let hit = false;
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const target = enemy.position.clone().add(new THREE.Vector3(0, .85, 0));
+        if (projectile.mesh.position.distanceTo(target) < 1.08) {
+          this.damageEnemy(enemy, null, 'acorn');
+          hit = true;
+          break;
+        }
+      }
+      if (hit || projectile.life <= 0 || projectile.mesh.position.y < -2) {
+        this.scene.remove(projectile.mesh);
+        projectile.mesh.geometry.dispose();
+        projectile.mesh.material.dispose();
+        this.friendlyProjectiles.splice(index, 1);
+      }
     }
   }
 
@@ -441,6 +506,8 @@ export class EnemySystem {
 
   reset() {
     for (const projectile of this.projectiles) this.scene.remove(projectile.mesh);
+    for (const projectile of this.friendlyProjectiles) this.scene.remove(projectile.mesh);
     this.projectiles = [];
+    this.friendlyProjectiles = [];
   }
 }
