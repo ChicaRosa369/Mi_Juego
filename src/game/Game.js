@@ -49,8 +49,15 @@ export class CanopyGlideGame {
   }
 
   setupRenderer() {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.35 : 1.85));
+    // Algunos navegadores de tablet rechazan los atributos avanzados de contexto
+    // aunque sí soporten WebGL. Pedimos primero un contexto estándar, como get.webgl.org.
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('webgl2')
+      || canvas.getContext('webgl')
+      || canvas.getContext('experimental-webgl');
+    if (!context) throw new Error('No se pudo crear un contexto WebGL.');
+    this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'default' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.25 : 1.7));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -298,7 +305,7 @@ export class CanopyGlideGame {
     const height = window.innerHeight;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.35 : 1.85));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.isTouchDevice ? 1.25 : 1.7));
     this.renderer.setSize(width, height);
     this.composer?.setSize(width, height);
   }
