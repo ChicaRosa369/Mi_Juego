@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#10291d" />
+    <meta name="description" content="Canopy Glide: The Lost Seeds — aventura 3D de ardilla voladora." />
+    <title>Canopy Glide: The Lost Seeds</title>
+    <script type="module" crossorigin src="./assets/index-Bf_6wYjt.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CLwZtMZc.css">
+  </head>
+  <body>
+    <main id="app" aria-label="Canopy Glide: The Lost Seeds">
+      <div id="webgl-container" aria-hidden="true"></div>
+
+      <section id="start-screen" class="screen-panel" aria-labelledby="game-title">
+        <div class="start-sun"></div>
+        <div class="start-copy">
+          <div class="eyebrow"><span class="leaf-mark">✦</span> AVENTURA 3D · SELVA MILENARIA</div>
+          <h1 id="game-title"><span>CANOPY</span> GLIDE</h1>
+          <p class="tagline">THE LOST SEEDS</p>
+          <p class="intro">Tres Bellotas Solares han sido robadas. Despliega tus patagios, domina las corrientes térmicas y escala hasta la fortaleza del Rey Mapache.</p>
+          <button id="start-button" class="primary-button" type="button"><span class="button-icon">▶</span> COMENZAR EXPEDICIÓN</button>
+          <div class="control-summary">
+            <div><kbd>WASD</kbd><span>moverse</span></div>
+            <div><kbd>ESPACIO</kbd><span>saltar / planear</span></div>
+            <div><kbd>F</kbd><span>picado</span></div>
+          </div>
+        </div>
+        <p class="tap-note">Optimizado para pantalla táctil · activa los controles al entrar</p>
+      </section>
+
+      <section id="hud" aria-label="Estado de la aventura">
+        <header class="hud-top">
+          <div class="brand-lockup">
+            <span class="brand-leaf">◆</span>
+            <div><strong>CANOPY GLIDE</strong><small>LAS SEMILLAS PERDIDAS</small></div>
+          </div>
+          <div class="zone-readout">
+            <span id="zone-label">SUELO DEL BOSQUE</span>
+            <span class="altitude"><i></i><span id="altitude-label">0 m</span></span>
+          </div>
+          <button id="help-button" class="icon-button" type="button" aria-label="Mostrar ayuda">?</button>
+        </header>
+
+        <div class="status-stack">
+          <div class="health-panel panel-glass" aria-label="Salud">
+            <span class="status-label">VITALIDAD</span>
+            <div id="hearts" class="hearts" aria-label="3 corazones">
+              <span class="heart active">♥</span><span class="heart active">♥</span><span class="heart active">♥</span>
+            </div>
+          </div>
+          <div class="seed-panel panel-glass" aria-label="Bellotas Solares">
+            <div class="seed-icon">✦</div>
+            <div><span class="status-label">BELLOTAS SOLARES</span><strong id="seed-count">0 <em>/</em> 3</strong></div>
+            <div id="seed-pips" class="seed-pips"><i></i><i></i><i></i></div>
+          </div>
+        </div>
+
+        <div class="stamina-wrap panel-glass" aria-label="Resistencia de planeo">
+          <div class="stamina-heading"><span>RESISTENCIA DE PLANEO</span><span id="stamina-number">100</span></div>
+          <div class="stamina-track"><div id="stamina-fill" class="stamina-fill"></div></div>
+        </div>
+
+        <aside id="objective-card" class="objective-card panel-glass">
+          <span class="objective-kicker">MISIÓN ACTUAL</span>
+          <p id="objective-text">Sigue el brillo dorado hasta la primera Bellota Solar.</p>
+        </aside>
+
+        <div id="boss-panel" class="boss-panel panel-glass" aria-live="polite">
+          <div class="boss-heading"><span>REY MAPACHE · MOTOR DE CHATARRA</span><b id="boss-value">03</b></div>
+          <div class="boss-track"><div id="boss-fill"></div></div>
+        </div>
+
+        <div id="notification-stack" class="notification-stack" aria-live="polite"></div>
+        <div id="interaction-prompt" class="interaction-prompt" aria-live="polite"><span class="prompt-key">E</span><span id="interaction-text">ACTIVAR ALTAR</span></div>
+        <div id="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      </section>
+
+      <section id="touch-controls" aria-label="Controles táctiles">
+        <div id="look-zone" aria-hidden="true"></div>
+        <div id="joystick-zone" class="joystick-zone" aria-label="Joystick de movimiento">
+          <div id="joystick-base" class="joystick-base"><div id="joystick-stick" class="joystick-stick"><span></span></div></div>
+          <span class="touch-caption">MOVER</span>
+        </div>
+        <div class="right-controls">
+          <button id="action-button" class="touch-button action-button" type="button" aria-label="Activar altar o interactuar"><span>✦</span><small>ACTIVAR</small></button>
+          <button id="dash-button" class="touch-button dash-button" type="button" aria-label="Ataque en picado"><span>↯</span><small>PICADO</small></button>
+          <button id="jump-button" class="touch-button jump-button" type="button" aria-label="Saltar o mantener para planear"><span>↟</span><small>SALTAR<br>PLANEAR</small></button>
+        </div>
+        <p class="look-caption">DESLIZA PARA MIRAR</p>
+      </section>
+
+      <section id="help-modal" class="help-modal" aria-hidden="true" aria-labelledby="help-title">
+        <div class="help-card">
+          <button id="close-help" class="close-button" type="button" aria-label="Cerrar ayuda">×</button>
+          <span class="eyebrow">MANUAL DE VUELO</span>
+          <h2 id="help-title">Domina el dosel</h2>
+          <div class="help-grid">
+            <article><b>01</b><h3>Corre y escala</h3><p>Acércate a los troncos mientras te mueves para trepar automáticamente.</p></article>
+            <article><b>02</b><h3>Planea</h3><p>Mantén salto en el aire. La resistencia baja lentamente y se repone al aterrizar o comer frutos.</p></article>
+            <article><b>03</b><h3>Busca térmicas</h3><p>Las espirales de aire turquesa te impulsan hacia la copa si las atraviesas planeando.</p></article>
+            <article><b>04</b><h3>Ataca desde arriba</h3><p>Usa PICADO en el aire para romper escudos, derrotar mapaches y dañar al Rey.</p></article>
+          </div>
+          <button id="help-play" class="primary-button small" type="button">ENTENDIDO</button>
+        </div>
+      </section>
+
+      <section id="victory-screen" class="screen-panel victory-screen" aria-hidden="true">
+        <div class="victory-card">
+          <div class="victory-spark">✦</div>
+          <span class="eyebrow">LA SELVA VUELVE A RESPIRAR</span>
+          <h2>Las Bellotas<br><em>han despertado.</em></h2>
+          <p>El Gran Árbol irradia vida otra vez. Gracias por devolver la luz al dosel.</p>
+          <div class="victory-stats"><div><b id="final-seeds">3</b><span>bellotas</span></div><div><b id="final-time">00:00</b><span>tiempo</span></div><div><b id="final-enemies">0</b><span>mapaches</span></div></div>
+          <button id="restart-button" class="primary-button" type="button">VOLVER A VOLAR</button>
+        </div>
+      </section>
+
+      <div id="rotate-device" class="rotate-device"><span>↻</span><p>Gira tu tablet para disfrutar del dosel en horizontal.</p></div>
+      <div id="webgl-fallback" class="webgl-fallback" hidden><h2>Tu navegador necesita WebGL</h2><p>Canopy Glide requiere aceleración gráfica para mostrar la selva en 3D.</p></div>
+    </main>
+  </body>
+</html>
