@@ -2,6 +2,12 @@
 
 Aventura de plataformas **3D WebGL** para un jugador, creada con [Three.js](https://threejs.org/) y Vite. El proyecto no utiliza un mockup HTML: la selva, la ardilla, los enemigos, la cámara y las mecánicas se renderizan en tiempo real mediante una escena 3D con iluminación, sombras, niebla, bloom y geometría low-poly procedural.
 
+## Jugar en línea
+
+Cuando finalice el despliegue, el juego se abre directamente desde cualquier navegador moderno en:
+
+**https://chicarosa369.github.io/Mi_Juego/**
+
 ## Jugar localmente
 
 ```bash
