@@ -241,7 +241,8 @@ export class CanopyGlideGame {
   updateCamera(delta, snap = false) {
     const look = this.input.consumeLook();
     this.cameraYaw -= look.x * .007;
-    this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch - look.y * .005, -.08, .62);
+    // Controles de cámara naturales: arrastrar hacia arriba eleva la vista.
+    this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + look.y * .005, -.08, .62);
 
     const targetHeight = this.player.gliding ? 1.5 : 1.15;
     const target = this.player.position.clone().add(new THREE.Vector3(0, targetHeight, 0));

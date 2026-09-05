@@ -149,7 +149,8 @@ export class InputController {
     const rect = this.joystickBase.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    const maxRadius = rect.width * .32;
+    // Área amplia y sensible: alcanza la velocidad máxima sin tener que estirar el dedo.
+    const maxRadius = rect.width * .28;
     let deltaX = clientX - centerX;
     let deltaY = clientY - centerY;
     const length = Math.hypot(deltaX, deltaY);
