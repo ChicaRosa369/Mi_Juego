@@ -6,6 +6,41 @@
     <meta name="theme-color" content="#10291d" />
     <meta name="description" content="Canopy Glide: The Lost Seeds — aventura 3D de ardilla voladora." />
     <title>Canopy Glide: The Lost Seeds</title>
+    <script>
+      // Captura el fallo real antes de que cargue el motor 3D. Es útil en tablets
+      // donde la consola de desarrollo no está disponible.
+      (function () {
+        const messages = [];
+        const remember = function (value) {
+          const text = value && value.message ? value.message : String(value || 'Error desconocido');
+          if (text && !messages.includes(text)) messages.push(text);
+        };
+        window.__canopyStartupErrors = messages;
+        const previousError = console.error.bind(console);
+        console.error = function () {
+          Array.prototype.forEach.call(arguments, remember);
+          previousError.apply(console, arguments);
+        };
+        window.addEventListener('error', function (event) { remember(event.error || event.message); });
+        window.addEventListener('unhandledrejection', function (event) { remember(event.reason); });
+        window.addEventListener('DOMContentLoaded', function () {
+          const fallback = document.querySelector('#webgl-fallback');
+          if (!fallback) return;
+          const showDetail = function () {
+            if (fallback.hidden) return;
+            let detail = document.querySelector('#webgl-fallback-detail');
+            if (!detail) {
+              detail = document.createElement('small');
+              detail.id = 'webgl-fallback-detail';
+              fallback.appendChild(detail);
+            }
+            if (!detail.textContent && messages.length) detail.textContent = 'Diagnóstico: ' + messages.join(' | ');
+          };
+          new MutationObserver(showDetail).observe(fallback, { attributes: true, attributeFilter: ['hidden'] });
+          window.setTimeout(showDetail, 700);
+        });
+      }());
+    </script>
     <script type="module" crossorigin src="https://cdn.jsdelivr.net/gh/ChicaRosa369/Mi_Juego@arena%2F01a071fc-mi-juego/docs/assets/index-Cpx-mn8q.js"></script>
     <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/ChicaRosa369/Mi_Juego@arena%2F01a071fc-mi-juego/docs/assets/index-CbdSruxk.css">
   </head>
