@@ -181,6 +181,8 @@ kbd { border: 1px solid rgba(218,252,200,.28); border-bottom-color: rgba(218,252
 .victory-stats span { margin-top: .2rem; color: #c0e4ac; font-family: 'DM Mono', monospace; font-size: .54rem; letter-spacing: .08em; }
 .rotate-device { display: none; }
 .webgl-fallback { position: fixed; z-index: 100; inset: 0; display: grid; place-content: center; padding: 30px; color: #f7f8db; text-align: center; background: #103024; }
+/* No permitir que el panel de error tape el juego antes de que JavaScript lo active. */
+.webgl-fallback[hidden] { display: none !important; }
 .webgl-fallback h2 { font-family: 'Unbounded', sans-serif; }
 .webgl-fallback small { display: block; max-width: min(620px, 90vw); margin: .9rem auto 0; color: #b7dbba; font-family: 'DM Mono', monospace; font-size: .72rem; line-height: 1.45; }
 
