@@ -1,0 +1,26 @@
+{
+  "name": "canopy-glide-the-lost-seeds",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A stylized 3D platform adventure built with Three.js.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "keywords": [
+    "threejs",
+    "webgl",
+    "3d",
+    "game",
+    "platformer"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "vite": "^8.2.2"
+  }
+}
