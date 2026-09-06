@@ -119,9 +119,9 @@ export class World {
     });
     this.scene.add(new THREE.Mesh(skyGeometry, skyMaterial));
 
-    const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture, color: '#fff1a0', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture, color: '#fff1a0', transparent: true, opacity: .62, depthWrite: false, blending: THREE.AdditiveBlending }));
     sun.position.set(-76, 77, -112);
-    sun.scale.set(38, 38, 1);
+    sun.scale.set(32, 32, 1);
     this.scene.add(sun);
 
     for (let index = 0; index < 13; index += 1) {

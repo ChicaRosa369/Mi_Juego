@@ -72,7 +72,8 @@ export class CanopyGlideGame {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.19;
+    // Reduce los blancos quemados al mirar hacia el sol, especialmente en pantallas de tablet.
+    this.renderer.toneMappingExposure = 1.06;
     this.container.append(this.renderer.domElement);
     this.input.bindDesktopLook(this.renderer.domElement);
 
@@ -82,7 +83,7 @@ export class CanopyGlideGame {
     stage = 'configurar los efectos visuales';
     this.composer = new EffectComposer(this.renderer);
     const renderPass = new RenderPass(this.scene, this.camera);
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .42, .55, .7);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), .28, .52, .72);
     this.composer.addPass(renderPass);
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(new OutputPass());
@@ -101,9 +102,9 @@ export class CanopyGlideGame {
     // Una ligera mayor visibilidad y brillo conservan el estilo cartoon sin cargar la tablet.
     this.scene.fog = new THREE.FogExp2('#396c53', .0138);
 
-    const hemisphere = new THREE.HemisphereLight('#c6f4cf', '#143b2d', 2.2);
+    const hemisphere = new THREE.HemisphereLight('#c6f4cf', '#143b2d', 1.95);
     this.scene.add(hemisphere);
-    const sun = new THREE.DirectionalLight('#ffe5a6', 4.1);
+    const sun = new THREE.DirectionalLight('#ffe5a6', 3.55);
     sun.position.set(-46, 72, 24);
     sun.castShadow = true;
     sun.shadow.mapSize.set(this.isTouchDevice ? 1024 : 2048, this.isTouchDevice ? 1024 : 2048);
@@ -115,7 +116,7 @@ export class CanopyGlideGame {
     sun.shadow.camera.far = 170;
     sun.shadow.bias = -.0002;
     this.scene.add(sun);
-    const rim = new THREE.DirectionalLight('#78cbae', 1.15);
+    const rim = new THREE.DirectionalLight('#78cbae', .92);
     rim.position.set(55, 32, -55);
     this.scene.add(rim);
 
