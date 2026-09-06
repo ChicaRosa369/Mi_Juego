@@ -46,7 +46,7 @@ export class EnemySystem {
     ].forEach(([x, y, z]) => this.addEnemy('lookout', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
     [
       [12.8, 7.9, 11], [-12.5, 18.2, -7], [7, 29.6, -31],
-      [4, 39.1, -53], [-3, 44.5, -70], [5, 48.4, -78],
+      [4, 38.4, -54], [-3, 44.5, -70], [5, 48.4, -78],
     ].forEach(([x, y, z]) => this.addEnemy('heavy', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
     this.createBoss();
   }

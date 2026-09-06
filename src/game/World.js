@@ -3,6 +3,14 @@ import * as THREE from 'three';
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+// Distancia desde un punto al borde rectangular de una plataforma. Sirve para
+// mantener los troncos fuera de la ruta jugable, no solo fuera de su centro.
+function distanceToPlatformBounds(x, z, platform) {
+  const horizontal = Math.max(0, Math.abs(x - platform.x) - platform.width / 2);
+  const depth = Math.max(0, Math.abs(z - platform.z) - platform.depth / 2);
+  return Math.hypot(horizontal, depth);
+}
+
 function seeded(index) {
   const value = Math.sin(index * 127.1 + 311.7) * 43758.5453123;
   return value - Math.floor(value);
@@ -85,8 +93,9 @@ export class World {
     this.createSky();
     this.createTerrain();
     this.createWater();
-    this.createForest();
+    // Las plataformas se colocan antes que los árboles para reservarles un corredor limpio.
     this.createPlatforms();
+    this.createForest();
     this.createThermals();
     this.createCollectibles();
     this.createAltar();
@@ -199,19 +208,29 @@ export class World {
     }
   }
 
+  isNearRoutePlatform(x, z, clearance = 0) {
+    return this.platforms.some((platform) => distanceToPlatformBounds(x, z, platform) < clearance);
+  }
+
   createForest() {
-    this.addTree(-4, -6, 4.7, { giant: true, canopy: 2.3 });
+    // El Gran Árbol sigue siendo un hito, pero queda al lado de la ruta y no la atraviesa.
+    this.addTree(-27, 7, 4.7, { giant: true, canopy: 2.3 });
     const heroTrees = [
-      [-31, 5, 3.1], [28, 11, 3.6], [-18, -26, 3.3], [23, -29, 3.9], [-30, -58, 4.4], [31, -60, 4.5],
-      [4, -45, 3.4], [-3, -82, 4.4], [45, -22, 2.9], [-47, -14, 3.2], [47, 42, 3.0], [-47, 43, 3.7],
+      [28, 11, 3.6], [-29, -31, 3.3], [30, -25, 3.9], [-30, -58, 4.4], [31, -60, 4.5],
+      [-14, -46, 3.4], [-25, -87, 4.4], [45, -22, 2.9], [-47, -14, 3.2], [47, 42, 3.0], [-47, 43, 3.7],
     ];
-    heroTrees.forEach(([x, z, scale], index) => this.addTree(x, z, scale, { canopy: 1.5 + (index % 3) * .22 }));
+    heroTrees.forEach(([x, z, scale], index) => {
+      // Aun los árboles decorativos grandes mantienen una separación visible de los escalones.
+      if (!this.isNearRoutePlatform(x, z, scale * 1.3 + 1.1)) this.addTree(x, z, scale, { canopy: 1.5 + (index % 3) * .22 });
+    });
 
     for (let index = 0; index < 48; index += 1) {
       const x = (seeded(index * 17 + 1) - .5) * 184;
       const z = (seeded(index * 17 + 2) - .5) * 188;
-      if (Math.hypot(x + 4, z + 6) < 25 || Math.hypot(x, z - 15) < 22 || Math.abs(x + 39) < 13) continue;
-      this.addTree(x, z, .65 + seeded(index * 17 + 3) * 1.15, { canopy: .65 + seeded(index * 17 + 4) * .8, detail: false });
+      const scale = .65 + seeded(index * 17 + 3) * 1.15;
+      const clearance = scale * 1.3 + 1.1;
+      if (Math.hypot(x + 27, z - 7) < 25 || Math.hypot(x, z - 15) < 22 || Math.abs(x + 39) < 13 || this.isNearRoutePlatform(x, z, clearance)) continue;
+      this.addTree(x, z, scale, { canopy: .65 + seeded(index * 17 + 4) * .8, detail: false });
     }
 
     const leafGeometry = new THREE.DodecahedronGeometry(1, 0);
@@ -219,7 +238,7 @@ export class World {
     for (let index = 0; index < 250; index += 1) {
       const x = (seeded(index * 4 + 40) - .5) * 197;
       const z = (seeded(index * 4 + 41) - .5) * 198;
-      if (Math.hypot(x, z - 15) < 15) continue;
+      if (Math.hypot(x, z - 15) < 15 || this.isNearRoutePlatform(x, z, .55)) continue;
       const bush = new THREE.Mesh(leafGeometry, leafMaterials[index % leafMaterials.length]);
       const scale = .3 + seeded(index * 4 + 42) * .95;
       bush.scale.set(scale * (1.2 + seeded(index) * .5), scale * .7, scale);
@@ -290,7 +309,8 @@ export class World {
 
   addPlatform({ x, z, top, width, depth, style = 'moss', name = '', floating = false }) {
     const group = new THREE.Group();
-    const baseHeight = floating ? 1.35 : .85;
+    // Bases más gruesas y una zona de apoyo amplia: se sienten como plataformas sólidas.
+    const baseHeight = floating ? 1.7 : .95;
     const base = new THREE.Mesh(new THREE.BoxGeometry(width, baseHeight, depth), style === 'wood' ? this.materials.wood : this.materials.bark);
     base.position.y = top - baseHeight / 2;
     base.castShadow = true;
@@ -313,7 +333,7 @@ export class World {
     }
     group.position.set(x, 0, z);
     this.scene.add(group);
-    this.platforms.push({ x, z, top, width, depth, name });
+    this.platforms.push({ x, z, top, width, depth, name, baseHeight, landingDepth: floating ? 2.35 : 1.15 });
     this.occluders.push(base);
     return group;
   }
@@ -341,12 +361,16 @@ export class World {
       { x: 21, z: -37, top: 30.9, width: 8, depth: 7, name: 'Rama del Halcón' },
       { x: 18, z: -45, top: 33.2, width: 9, depth: 7, name: 'Nudo de Lianas' },
     ];
+    // Escalera final: peldaños cercanos, anchos y con solape seguro para no caer entre rutas.
     const highCanopy = [
       { x: 9, z: -50, top: 35.8, width: 10, depth: 8, name: 'Cresta de Niebla' },
-      { x: 3, z: -54, top: 38.3, width: 10, depth: 8, name: 'Puente de las Nubes', style: 'wood' },
-      { x: -4, z: -62, top: 41.2, width: 11, depth: 8, name: 'Atalaya de la Copa' },
+      { x: 4, z: -54, top: 37.7, width: 9, depth: 7, name: 'Paso de Nube', style: 'wood' },
+      { x: -2, z: -59, top: 39.6, width: 9, depth: 7, name: 'Escalón de Bruma' },
+      { x: -4, z: -65, top: 41.6, width: 10, depth: 7, name: 'Atalaya de la Copa' },
       { x: -3, z: -70, top: 43.7, width: 10, depth: 8, name: 'Rama del Trueno' },
+      { x: 2, z: -74, top: 45.5, width: 8, depth: 7, name: 'Rama del Aire' },
       { x: 6, z: -78, top: 47.4, width: 12, depth: 9, name: 'Antesala de la Fortaleza', style: 'wood' },
+      { x: 3, z: -85, top: 49.1, width: 10, depth: 8, name: 'Puente Final', style: 'wood' },
       { x: 0, z: -92, top: 50.5, width: 31, depth: 25, style: 'wood', name: 'Fortaleza de Chatarra' },
     ];
     [...lowerCanopy, ...middleCanopy, ...highCanopy].forEach((platform) => this.addPlatform({ ...platform, floating: true }));
@@ -366,11 +390,16 @@ export class World {
       [new THREE.Vector3(-13, 18.1, -12), new THREE.Vector3(-20, 21.0, -17)],
       [new THREE.Vector3(-18, 22.0, -20), new THREE.Vector3(-7, 25.0, -20)],
       [new THREE.Vector3(-2, 26.0, -22), new THREE.Vector3(6, 28.2, -31)],
-      [new THREE.Vector3(11, 29.2, -38), new THREE.Vector3(5, 37.7, -51)],
-      [new THREE.Vector3(2, 39.0, -56), new THREE.Vector3(-3, 40.8, -61)],
-      [new THREE.Vector3(-4, 42.0, -65), new THREE.Vector3(-2, 43.3, -70)],
-      [new THREE.Vector3(0, 45.0, -73), new THREE.Vector3(5, 47.0, -78)],
-      [new THREE.Vector3(4, 48.0, -82), new THREE.Vector3(1, 50.1, -86)],
+      [new THREE.Vector3(11, 29.2, -38), new THREE.Vector3(17, 32.6, -44)],
+      [new THREE.Vector3(16, 33.7, -46), new THREE.Vector3(8, 35.4, -50)],
+      [new THREE.Vector3(7, 36.3, -51), new THREE.Vector3(4, 37.3, -54)],
+      [new THREE.Vector3(2, 38.3, -56), new THREE.Vector3(-2, 39.2, -59)],
+      [new THREE.Vector3(-3, 40.3, -61), new THREE.Vector3(-4, 41.2, -65)],
+      [new THREE.Vector3(-4, 42.3, -67), new THREE.Vector3(-3, 43.3, -70)],
+      [new THREE.Vector3(-1, 44.6, -72), new THREE.Vector3(2, 45.1, -74)],
+      [new THREE.Vector3(3, 46.1, -76), new THREE.Vector3(5, 47.0, -78)],
+      [new THREE.Vector3(5, 48.0, -81), new THREE.Vector3(3, 48.8, -85)],
+      [new THREE.Vector3(2, 49.5, -88), new THREE.Vector3(1, 50.1, -86)],
     ];
     bridgePoints.forEach(([a, b], index) => {
       const log = cylinderBetween(a, b, .38, .57, this.materials.barkLight, 8);
@@ -402,7 +431,7 @@ export class World {
       { x: 2, z: 11, bottom: .1, top: 13, radius: 4.4, strength: 19 },
       { x: -7, z: -5, bottom: 1, top: 25, radius: 4.8, strength: 21 },
       { x: 4, z: -27, bottom: 8, top: 36, radius: 5.0, strength: 23 },
-      { x: 3, z: -52, bottom: 20, top: 46, radius: 5.3, strength: 24 },
+      { x: 4, z: -54, bottom: 20, top: 46, radius: 6.1, strength: 24 },
       { x: 1, z: -77, bottom: 34, top: 59, radius: 5.4, strength: 26 },
       { x: 21, z: -42, bottom: 23, top: 39, radius: 4.2, strength: 20 },
     ];
@@ -436,20 +465,20 @@ export class World {
 
   createCollectibles() {
     const seeds = [
-      { id: 'dawn', title: 'Bellota Solar del Alba', x: 10, y: 9.3, z: 12, checkpoint: new THREE.Vector3(10, 8.5, 15) },
-      { id: 'ember', title: 'Bellota Solar de Brasa', x: -15, y: 19.6, z: -8, checkpoint: new THREE.Vector3(-15, 18.6, -4) },
-      { id: 'sky', title: 'Bellota Solar del Cielo', x: 11, y: 30.9, z: -34, checkpoint: new THREE.Vector3(11, 29.9, -29) },
+      { id: 'dawn', title: 'Bellota Solar del Alba', x: 10, y: 8.5, z: 12, checkpoint: new THREE.Vector3(10, 8.5, 15) },
+      { id: 'ember', title: 'Bellota Solar de Brasa', x: -15, y: 18.8, z: -8, checkpoint: new THREE.Vector3(-15, 18.6, -4) },
+      { id: 'sky', title: 'Bellota Solar del Cielo', x: 11, y: 30.1, z: -34, checkpoint: new THREE.Vector3(11, 29.9, -29) },
     ];
     seeds.forEach((seed, index) => this.addSolarSeed(seed, index));
 
     const fruitData = [
-      [4, 1.2, 18], [-7, 3.9, 19], [2, 5.9, 16], [16, 7.4, 14], [13, 8.8, 8], [7, 12.8, 4], [-9, 16.9, -3], [-20, 20.8, -10], [-14, 25.2, -14], [-5, 27.0, -20], [5, 30, -30], [15, 30, -36], [19, 34.8, -45], [4, 39.8, -53], [-4, 42.8, -62], [-3, 45.4, -70], [6, 49.0, -78], [2, 52.0, -87],
+      [4, 6.0, 18], [-7, 3.9, 19], [2, 5.9, 16], [16, 8.4, 14], [13, 8.4, 8], [7, 12.8, 4], [-6, 16.7, -3], [-20, 20.5, -10], [-14, 25.0, -20], [-5, 26.7, -20], [5, 30, -30], [15, 30, -36], [19, 34.5, -45], [4, 39.0, -54], [-4, 42.9, -62], [-3, 45.0, -70], [6, 48.7, -78], [2, 51.8, -87],
     ];
     fruitData.forEach(([x, y, z], index) => this.addFruit(x, y, z, index));
 
     // Los racimos marrones son munición; no cuentan como Bellotas Solares.
     const ammoData = [
-      [-6, 3.7, 20], [3, 5.8, 17], [16, 7.4, 15], [19, 10.8, 8], [7, 12.8, 3], [-10, 16.9, -4], [-23, 20.6, -18], [-14, 25.2, -21], [3, 28.8, -27], [19, 32.7, -38], [17, 35.0, -45], [4, 40.2, -54], [-4, 43.2, -62], [-2, 45.6, -70], [6, 49.4, -78], [0, 52.0, -84],
+      [-6, 3.7, 20], [-1, 6.0, 17], [16, 8.4, 15], [19, 10.8, 8], [7, 12.8, 3], [-6, 16.7, -4], [-23, 22.8, -18], [-14, 25.0, -21], [3, 28.5, -27], [19, 32.2, -38], [17, 34.5, -45], [4, 39.0, -54], [-4, 42.9, -62], [-2, 45.0, -70], [6, 48.7, -78], [0, 51.8, -84],
     ];
     ammoData.forEach(([x, y, z], index) => this.addAmmoPack(x, y, z, index, 5));
   }
@@ -656,9 +685,13 @@ export class World {
   getLandingHeight(x, z, previousY) {
     let height = this.terrainHeight(x, z);
     for (const platform of this.platforms) {
-      if (Math.abs(x - platform.x) <= platform.width / 2 + .28 && Math.abs(z - platform.z) <= platform.depth / 2 + .28 && previousY >= platform.top - .7) {
-        height = Math.max(height, platform.top);
-      }
+      const isOverPlatform = Math.abs(x - platform.x) <= platform.width / 2 + .68
+        && Math.abs(z - platform.z) <= platform.depth / 2 + .68;
+      // Antes solo se reconocía la franja superior de 0.7 unidades. Con el salto,
+      // planeo y la cámara táctil era posible ver a la ardilla sobre una plataforma
+      // pero perder el suelo. Toda la base y un margen de aterrizaje cuentan ahora.
+      const canCatchPlayer = previousY >= platform.top - platform.landingDepth;
+      if (isOverPlatform && canCatchPlayer) height = Math.max(height, platform.top);
     }
     return height;
   }
