@@ -3,14 +3,6 @@ import * as THREE from 'three';
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-// Distancia desde un punto al borde rectangular de una plataforma. Sirve para
-// mantener los troncos fuera de la ruta jugable, no solo fuera de su centro.
-function distanceToPlatformBounds(x, z, platform) {
-  const horizontal = Math.max(0, Math.abs(x - platform.x) - platform.width / 2);
-  const depth = Math.max(0, Math.abs(z - platform.z) - platform.depth / 2);
-  return Math.hypot(horizontal, depth);
-}
-
 function seeded(index) {
   const value = Math.sin(index * 127.1 + 311.7) * 43758.5453123;
   return value - Math.floor(value);
@@ -48,7 +40,10 @@ export class World {
     this.scene = scene;
     this.time = 0;
     this.platforms = [];
+    this.platformById = new Map();
+    this.walkways = [];
     this.climbables = [];
+    this.climbingVines = [];
     this.thermals = [];
     this.collectibles = [];
     this.fruits = [];
@@ -96,6 +91,7 @@ export class World {
     // Las plataformas se colocan antes que los árboles para reservarles un corredor limpio.
     this.createPlatforms();
     this.createForest();
+    this.createClimbingVines();
     this.createThermals();
     this.createCollectibles();
     this.createAltar();
@@ -163,20 +159,25 @@ export class World {
     clearing.receiveShadow = true;
     this.scene.add(clearing);
 
+    // Rocas de paisaje colocadas a mano: dejan la zona del altar y el corredor de juego despejados.
+    const rockData = [
+      [-23, 28, .72, .1], [-34, 18, .58, .8], [23, 25, .64, .4], [36, 14, .83, 1.1],
+      [-29, 2, .76, .6], [31, -4, .51, 1.6], [-34, -18, .88, .2], [34, -20, .69, .9],
+      [-39, -37, .83, 1.8], [38, -34, .61, .4], [-31, -49, .92, 1.2], [42, -53, .75, .6],
+      [-36, -67, .68, 1.9], [35, -70, .88, .3], [-41, -87, .73, .8], [38, -90, .56, 1.4],
+      [-37, -105, .95, .2], [39, -106, .76, 1.1], [-58, 38, .64, .5], [58, 35, .78, 1.7],
+      [-61, -12, .82, .3], [61, -17, .68, 1.2], [-61, -63, .74, .7], [62, -70, .9, 1.5],
+    ];
     const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
-    for (let index = 0; index < 95; index += 1) {
-      const x = (seeded(index * 8) - .5) * 185;
-      const z = (seeded(index * 8 + 1) - .5) * 185;
-      if (Math.hypot(x, z - 15) < 19) continue;
+    rockData.forEach(([x, z, scale, rotation], index) => {
       const rock = new THREE.Mesh(rockGeometry, index % 3 ? this.materials.stone : this.materials.stoneLight);
-      const scale = .18 + seeded(index * 8 + 2) * .85;
-      rock.scale.set(scale * 1.1, scale * (.55 + seeded(index) * .55), scale);
+      rock.scale.set(scale * 1.1, scale * (index % 2 ? .72 : .95), scale);
       rock.position.set(x, this.terrainHeight(x, z) + rock.scale.y * .45, z);
-      rock.rotation.set(seeded(index) * 3, seeded(index + 30) * 3, seeded(index + 70) * 3);
+      rock.rotation.set(index % 2 ? .15 : .35, rotation, index % 3 ? .22 : -.18);
       rock.castShadow = true;
       rock.receiveShadow = true;
       this.scene.add(rock);
-    }
+    });
   }
 
   createWater() {
@@ -200,53 +201,54 @@ export class World {
     this.scene.add(stream);
     this.waterMaterials.push(stream.material);
 
-    for (let index = 0; index < 24; index += 1) {
-      const lily = new THREE.Mesh(new THREE.CircleGeometry(.65 + seeded(index) * .5, 7), new THREE.MeshStandardMaterial({ color: index % 4 ? '#5f9d42' : '#a6c653', roughness: .85, flatShading: true }));
+    // Nenúfares distribuidos por grupos definidos, evitando la sensación de objetos al azar.
+    const lilyPads = [
+      [-43, 34, .78], [-39, 30, .62], [-35, 27, .84], [-42, 18, .7], [-36, 13, .92],
+      [-44, 2, .76], [-37, -7, .65], [-42, -20, .88], [-36, -29, .72], [-43, -40, .95],
+      [-37, -50, .68], [-42, -63, .84], [-35, -71, .7], [-43, -82, .91], [-37, -94, .74],
+      [-42, -104, .88],
+    ];
+    lilyPads.forEach(([x, z, scale], index) => {
+      const lily = new THREE.Mesh(new THREE.CircleGeometry(scale, 7), new THREE.MeshStandardMaterial({ color: index % 4 ? '#5f9d42' : '#a6c653', roughness: .85, flatShading: true }));
       lily.rotation.x = -Math.PI / 2;
-      lily.position.set(-41 + (seeded(index + 10) - .5) * 12, -.39, (seeded(index + 30) - .5) * 174);
+      lily.position.set(x, -.39, z);
       this.scene.add(lily);
-    }
-  }
-
-  isNearRoutePlatform(x, z, clearance = 0) {
-    return this.platforms.some((platform) => distanceToPlatformBounds(x, z, platform) < clearance);
+    });
   }
 
   createForest() {
-    // El Gran Árbol sigue siendo un hito, pero queda al lado de la ruta y no la atraviesa.
-    this.addTree(-27, 7, 4.7, { giant: true, canopy: 2.3 });
-    const heroTrees = [
-      [28, 11, 3.6], [-29, -31, 3.3], [30, -25, 3.9], [-30, -58, 4.4], [31, -60, 4.5],
-      [-14, -46, 3.4], [-25, -87, 4.4], [45, -22, 2.9], [-47, -14, 3.2], [47, 42, 3.0], [-47, 43, 3.7],
+    // Bosque diseñado a mano: los árboles enmarcan el recorrido, no lo atraviesan.
+    const forestPlan = [
+      { x: -48, z: 8, scale: 4.1, giant: true, canopy: 1.75 },
+      { x: -34, z: 30, scale: 3.2, canopy: 1.35 }, { x: 31, z: 25, scale: 3.1, canopy: 1.3 },
+      { x: 45, z: 16, scale: 3.0, canopy: 1.2 }, { x: -47, z: -3, scale: 3.25, canopy: 1.35 },
+      { x: 38, z: -11, scale: 3.0, canopy: 1.2 }, { x: -48, z: -33, scale: 3.35, canopy: 1.35 },
+      { x: 37, z: -28, scale: 3.15, canopy: 1.25 }, { x: -42, z: -48, scale: 3.5, canopy: 1.3 },
+      { x: 53, z: -39, scale: 3.4, canopy: 1.3 }, { x: -40, z: -63, scale: 3.55, canopy: 1.35 },
+      { x: 48, z: -67, scale: 3.45, canopy: 1.3 }, { x: -40, z: -83, scale: 3.55, canopy: 1.35 },
+      { x: 40, z: -83, scale: 3.55, canopy: 1.35 }, { x: -40, z: -105, scale: 3.7, canopy: 1.35 },
+      { x: 40, z: -106, scale: 3.7, canopy: 1.35 }, { x: -58, z: 38, scale: 2.7, canopy: 1.05, detail: false },
+      { x: 58, z: 35, scale: 2.8, canopy: 1.05, detail: false }, { x: -61, z: -12, scale: 2.9, canopy: 1.1, detail: false },
+      { x: 61, z: -17, scale: 2.8, canopy: 1.1, detail: false }, { x: -61, z: -63, scale: 2.9, canopy: 1.1, detail: false },
+      { x: 62, z: -70, scale: 3.0, canopy: 1.1, detail: false },
     ];
-    heroTrees.forEach(([x, z, scale], index) => {
-      // Aun los árboles decorativos grandes mantienen una separación visible de los escalones.
-      if (!this.isNearRoutePlatform(x, z, scale * 1.3 + 1.1)) this.addTree(x, z, scale, { canopy: 1.5 + (index % 3) * .22 });
-    });
+    forestPlan.forEach((tree) => this.addTree(tree.x, tree.z, tree.scale, tree));
 
-    for (let index = 0; index < 48; index += 1) {
-      const x = (seeded(index * 17 + 1) - .5) * 184;
-      const z = (seeded(index * 17 + 2) - .5) * 188;
-      const scale = .65 + seeded(index * 17 + 3) * 1.15;
-      const clearance = scale * 1.3 + 1.1;
-      if (Math.hypot(x + 27, z - 7) < 25 || Math.hypot(x, z - 15) < 22 || Math.abs(x + 39) < 13 || this.isNearRoutePlatform(x, z, clearance)) continue;
-      this.addTree(x, z, scale, { canopy: .65 + seeded(index * 17 + 4) * .8, detail: false });
-    }
-
+    // El sotobosque también está agrupado a propósito, siempre fuera del corredor jugable.
+    const undergrowth = [
+      [-27, 24, .8], [-30, 19, .6], [24, 20, .7], [35, 8, .55], [-30, 0, .72], [30, -4, .6],
+      [-31, -23, .82], [29, -22, .7], [-34, -41, .76], [36, -39, .64], [-31, -57, .86], [34, -57, .74],
+      [-34, -72, .7], [40, -58, .82], [-31, -90, .85], [32, -92, .72], [-33, -106, .78], [32, -105, .72],
+    ];
     const leafGeometry = new THREE.DodecahedronGeometry(1, 0);
-    const leafMaterials = [this.materials.leaf, this.materials.leafLight, this.materials.leafDark];
-    for (let index = 0; index < 250; index += 1) {
-      const x = (seeded(index * 4 + 40) - .5) * 197;
-      const z = (seeded(index * 4 + 41) - .5) * 198;
-      if (Math.hypot(x, z - 15) < 15 || this.isNearRoutePlatform(x, z, .55)) continue;
-      const bush = new THREE.Mesh(leafGeometry, leafMaterials[index % leafMaterials.length]);
-      const scale = .3 + seeded(index * 4 + 42) * .95;
-      bush.scale.set(scale * (1.2 + seeded(index) * .5), scale * .7, scale);
-      bush.position.set(x, this.terrainHeight(x, z) + scale * .36, z);
-      bush.rotation.set(seeded(index + 10) * 2, seeded(index + 50) * 4, 0);
+    undergrowth.forEach(([x, z, scale], index) => {
+      const bush = new THREE.Mesh(leafGeometry, [this.materials.leaf, this.materials.leafLight, this.materials.leafDark][index % 3]);
+      bush.scale.set(scale * (index % 2 ? 1.35 : 1.12), scale * .68, scale);
+      bush.position.set(x, this.terrainHeight(x, z) + scale * .34, z);
+      bush.rotation.set(index % 2 ? .14 : .28, index * .45, 0);
       bush.castShadow = true;
       this.scene.add(bush);
-    }
+    });
   }
 
   addTree(x, z, scale, options = {}) {
@@ -254,6 +256,8 @@ export class World {
     const group = new THREE.Group();
     const height = scale * (options.giant ? 10.5 : 7.8);
     const radius = scale * (options.giant ? 1.18 : .65);
+    const canopyFactor = options.canopy || 1;
+    const canopyGeometryRadius = scale * (options.giant ? 1.58 : 1.1) * canopyFactor;
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(radius * .6, radius, height, options.giant ? 10 : 7, 5), options.giant ? this.materials.barkLight : this.materials.bark);
     trunk.position.y = base + height / 2;
     trunk.castShadow = true;
@@ -274,7 +278,7 @@ export class World {
 
     const canopyY = base + height * .84;
     const canopyCount = options.giant ? 15 : options.detail === false ? 5 : 8;
-    const canopyGeometry = new THREE.DodecahedronGeometry(scale * (options.giant ? 1.58 : 1.1) * (options.canopy || 1), 0);
+    const canopyGeometry = new THREE.DodecahedronGeometry(canopyGeometryRadius, 0);
     for (let leaf = 0; leaf < canopyCount; leaf += 1) {
       const angle = (leaf / canopyCount) * Math.PI * 2 + seeded(x * leaf + z) * .5;
       const layer = leaf % 3;
@@ -303,13 +307,18 @@ export class World {
 
     group.position.set(x, 0, z);
     this.scene.add(group);
-    this.climbables.push({ x, z, radius: radius + .18, base, top: base + height * .83 });
+    // Estos límites conservadores se usan en la validación del plano para que la copa no invada plataformas altas.
+    const maximumSpread = scale * (options.giant ? 1.914 : 1.32);
+    const canopyRadius = canopyGeometryRadius * 1.75 + maximumSpread;
+    const branchFoliageBottom = options.giant ? base + height * .58 + 1.2 - scale * .9 : Infinity;
+    const canopyBottom = Math.min(canopyY - canopyGeometryRadius * 1.04, branchFoliageBottom);
+    const canopyTop = canopyY + scale * 2.7 + canopyGeometryRadius * 1.04;
+    this.climbables.push({ x, z, radius: radius + .18, base, top: base + height * .83, solid: true, canopyRadius, canopyBottom, canopyTop });
     return group;
   }
 
-  addPlatform({ x, z, top, width, depth, style = 'moss', name = '', floating = false }) {
+  addPlatform({ id, x, z, top, width, depth, style = 'moss', name = '', floating = false, decorate = true }) {
     const group = new THREE.Group();
-    // Bases más gruesas y una zona de apoyo amplia: se sienten como plataformas sólidas.
     const baseHeight = floating ? 1.7 : .95;
     const base = new THREE.Mesh(new THREE.BoxGeometry(width, baseHeight, depth), style === 'wood' ? this.materials.wood : this.materials.bark);
     base.position.y = top - baseHeight / 2;
@@ -322,118 +331,160 @@ export class World {
     turf.receiveShadow = true;
     group.add(turf);
 
-    const rockGeometry = new THREE.DodecahedronGeometry(.55, 0);
-    for (let index = 0; index < 8; index += 1) {
-      const decoration = new THREE.Mesh(index % 3 ? rockGeometry : new THREE.ConeGeometry(.35, 1.0, 5), index % 3 ? this.materials.stoneLight : this.materials.leafLight);
-      decoration.position.set((seeded(index + x) - .5) * width * .78, top + (index % 3 ? .18 : .43), (seeded(index + z + 99) - .5) * depth * .78);
-      decoration.scale.setScalar(.6 + seeded(index + x + z) * .6);
-      decoration.rotation.y = seeded(index + z) * Math.PI;
-      decoration.castShadow = true;
-      group.add(decoration);
+    // Detalles en bordes concretos: el centro se reserva para aterrizar y recoger objetos.
+    if (decorate) {
+      const edgeDetails = style === 'wood'
+        ? [[-.34, -.3, 'leaf'], [.34, .3, 'rock']]
+        : [[-.36, -.31, 'rock'], [.34, .31, 'leaf'], [-.34, .31, 'leaf']];
+      edgeDetails.forEach(([horizontal, depthOffset, type], index) => {
+        const geometry = type === 'rock' ? new THREE.DodecahedronGeometry(.48, 0) : new THREE.ConeGeometry(.28, .82, 5);
+        const decoration = new THREE.Mesh(geometry, type === 'rock' ? this.materials.stoneLight : this.materials.leafLight);
+        decoration.position.set(horizontal * width, top + (type === 'rock' ? .2 : .4), depthOffset * depth);
+        decoration.scale.setScalar(index === 1 ? .82 : .66);
+        decoration.rotation.y = index * 1.7;
+        decoration.castShadow = true;
+        group.add(decoration);
+      });
     }
     group.position.set(x, 0, z);
     this.scene.add(group);
-    this.platforms.push({ x, z, top, width, depth, name, baseHeight, landingDepth: floating ? 2.35 : 1.15 });
+    const platform = { id, x, z, top, width, depth, name, baseHeight, landingDepth: floating ? 2.35 : 1.15 };
+    this.platforms.push(platform);
+    this.platformById.set(id, platform);
     this.occluders.push(base);
-    return group;
+    return platform;
+  }
+
+  getPlatform(id) {
+    const platform = this.platformById.get(id);
+    if (!platform) throw new Error(`Plataforma desconocida: ${id}`);
+    return platform;
+  }
+
+  getPlatformPoint(id, offsetX = 0, offsetZ = 0, height = 0) {
+    const platform = this.getPlatform(id);
+    return new THREE.Vector3(platform.x + offsetX, platform.top + height, platform.z + offsetZ);
+  }
+
+  getPlatformEdge(platform, target) {
+    const direction = new THREE.Vector3(target.x - platform.x, 0, target.z - platform.z);
+    const length = direction.length();
+    if (length < .001) return new THREE.Vector3(platform.x, platform.top, platform.z);
+    direction.multiplyScalar(1 / length);
+    const inset = .28;
+    const xDistance = Math.abs(direction.x) > .001 ? (platform.width / 2 - inset) / Math.abs(direction.x) : Infinity;
+    const zDistance = Math.abs(direction.z) > .001 ? (platform.depth / 2 - inset) / Math.abs(direction.z) : Infinity;
+    const distance = Math.min(xDistance, zDistance);
+    return new THREE.Vector3(platform.x + direction.x * distance, platform.top, platform.z + direction.z * distance);
+  }
+
+  addRouteBridge(fromId, toId, index) {
+    const from = this.getPlatform(fromId);
+    const to = this.getPlatform(toId);
+    const start = this.getPlatformEdge(from, to);
+    const end = this.getPlatformEdge(to, from);
+    if (start.distanceTo(end) < .25) return;
+
+    // El tronco visual y su superficie de colisión comparten exactamente el mismo tramo.
+    const visualStart = start.clone();
+    const visualEnd = end.clone();
+    // El lomo del tronco queda a ras de la altura física de la pasarela.
+    visualStart.y -= .38;
+    visualEnd.y -= .38;
+    const log = cylinderBetween(visualStart, visualEnd, .38, .46, this.materials.barkLight, 8);
+    this.scene.add(log);
+    this.walkways.push({ fromId, toId, start, end, radius: .78, landingDepth: 1.85, name: `${from.name} → ${to.name}` });
+
+    for (let knot = 0; knot < 3; knot += 1) {
+      const t = (knot + 1) / 4;
+      const point = visualStart.clone().lerp(visualEnd, t);
+      const vine = new THREE.Mesh(new THREE.TorusGeometry(.34, .055, 5, 9), this.materials.vine);
+      vine.position.copy(point);
+      vine.rotation.x = Math.PI / 2;
+      this.scene.add(vine);
+    }
+    this.animated.push({ type: 'bridge', object: log, phase: index });
   }
 
   createPlatforms() {
-    // Ruta baja: varias islas cercanas convierten el arranque en un pequeño circuito de práctica.
-    const lowerCanopy = [
-      { x: -7, z: 19, top: 2.7, width: 9, depth: 7, name: 'Raíces del Arroyo' },
-      { x: 1, z: 16, top: 4.7, width: 10, depth: 7, name: 'Mirador de Musgo' },
-      { x: 16, z: 16, top: 6.2, width: 9, depth: 7, name: 'Rama del Sol' },
-      { x: 10, z: 12, top: 7.2, width: 15, depth: 10, name: 'Nido del Alba' },
-      { x: 19, z: 8, top: 9.6, width: 8, depth: 7, name: 'Percha del Vigía', style: 'wood' },
-      { x: 8, z: 4, top: 11.5, width: 10, depth: 7, name: 'Cruce de Lianas' },
-      { x: -2, z: 0, top: 13.4, width: 9, depth: 7, name: 'Balcón Esmeralda' },
-      { x: -10, z: -3, top: 15.4, width: 10, depth: 7, name: 'Paso del Colibrí' },
-      { x: -15, z: -8, top: 17.5, width: 15, depth: 11, name: 'Puente de Lianas' },
+    // Ruta principal diseñada a mano. Cada rectángulo deja una separación real al siguiente.
+    const mainRoute = [
+      { id: 'roots', x: -11, z: 23, top: 2.7, width: 8, depth: 6, name: 'Raíces del Arroyo' },
+      { id: 'moss', x: -1, z: 25, top: 4.4, width: 8, depth: 6, name: 'Mirador de Musgo' },
+      { id: 'dawn', x: 12, z: 12, top: 6.1, width: 9, depth: 7, name: 'Nido del Alba' },
+      { id: 'perch', x: 21, z: 6, top: 8.1, width: 7, depth: 6, style: 'wood', name: 'Percha del Vigía' },
+      { id: 'emerald', x: 12, z: 1, top: 10.0, width: 8, depth: 6, name: 'Balcón Esmeralda' },
+      { id: 'hummingbird', x: 2, z: -3, top: 12.0, width: 8, depth: 6, name: 'Paso del Colibrí' },
+      { id: 'vineBridge', x: -8, z: -8, top: 14.1, width: 9, depth: 7, name: 'Puente de Lianas' },
+      { id: 'windNest', x: -18, z: -12, top: 16.2, width: 8, depth: 6, name: 'Nido del Viento' },
+      { id: 'amber', x: -22, z: -20, top: 18.2, width: 8, depth: 7, name: 'Rama de Ámbar' },
+      { id: 'fern', x: -13, z: -25, top: 20.3, width: 8, depth: 6, name: 'Terraza de Helechos' },
+      { id: 'breeze', x: -3, z: -29, top: 22.4, width: 8, depth: 6, name: 'Isla de los Vientos' },
+      { id: 'windCrown', x: 7, z: -34, top: 24.7, width: 10, depth: 7, name: 'Copa del Viento' },
+      { id: 'hawk', x: 18, z: -38, top: 27.0, width: 8, depth: 6, name: 'Rama del Halcón' },
+      { id: 'knot', x: 24, z: -46, top: 29.4, width: 8, depth: 6, name: 'Nudo de Lianas' },
+      { id: 'mistCrest', x: 15, z: -52, top: 32.0, width: 9, depth: 7, name: 'Cresta de Niebla' },
+      { id: 'cloudStep', x: 5, z: -56, top: 34.7, width: 8, depth: 6, style: 'wood', name: 'Paso de Nube' },
+      { id: 'mistStep', x: -5, z: -61, top: 37.4, width: 8, depth: 6, name: 'Escalón de Bruma' },
+      { id: 'lookoutCrown', x: -14, z: -67, top: 40.1, width: 8, depth: 6, name: 'Atalaya de la Copa' },
+      { id: 'thunder', x: -7, z: -73.5, top: 42.8, width: 8, depth: 6, name: 'Rama del Trueno' },
+      { id: 'air', x: 3, z: -78, top: 45.4, width: 8, depth: 6, name: 'Rama del Aire' },
+      { id: 'antechamber', x: 12, z: -83, top: 48.0, width: 9, depth: 7, style: 'wood', name: 'Antesala de la Fortaleza' },
+      { id: 'finalBridge', x: 1, z: -89, top: 49.5, width: 9, depth: 6, style: 'wood', name: 'Puente Final' },
+      { id: 'fortress', x: 0, z: -101, top: 50.7, width: 31, depth: 16, style: 'wood', name: 'Fortaleza de Chatarra', decorate: false },
     ];
-    const middleCanopy = [
-      { x: -24, z: -10, top: 19.3, width: 8, depth: 7, name: 'Nido del Viento' },
-      { x: -23, z: -18, top: 21.5, width: 9, depth: 7, name: 'Rama de Ámbar' },
-      { x: -14, z: -21, top: 23.7, width: 9, depth: 7, name: 'Terraza de Helechos' },
-      { x: -5, z: -20, top: 25.4, width: 10, depth: 7, name: 'Cruce de la Brisa' },
-      { x: 3, z: -27, top: 27.2, width: 9, depth: 7, name: 'Isla de los Vientos' },
-      { x: 11, z: -34, top: 28.8, width: 16, depth: 11, name: 'Copa del Viento' },
-      { x: 21, z: -37, top: 30.9, width: 8, depth: 7, name: 'Rama del Halcón' },
-      { x: 18, z: -45, top: 33.2, width: 9, depth: 7, name: 'Nudo de Lianas' },
+    const sidePlatforms = [
+      { id: 'lookoutTower', x: 30, z: 7, top: 8.6, width: 6, depth: 6, style: 'wood', name: 'Torre del Vigía' },
+      { id: 'hiddenNest', x: -32, z: -18, top: 19.0, width: 7, depth: 6, style: 'wood', name: 'Nido Escondido' },
+      { id: 'skyTower', x: 34, z: -46, top: 30.3, width: 6, depth: 6, style: 'wood', name: 'Torre de la Copa' },
     ];
-    // Escalera final: peldaños cercanos, anchos y con solape seguro para no caer entre rutas.
-    const highCanopy = [
-      { x: 9, z: -50, top: 35.8, width: 10, depth: 8, name: 'Cresta de Niebla' },
-      { x: 4, z: -54, top: 37.7, width: 9, depth: 7, name: 'Paso de Nube', style: 'wood' },
-      { x: -2, z: -59, top: 39.6, width: 9, depth: 7, name: 'Escalón de Bruma' },
-      { x: -4, z: -65, top: 41.6, width: 10, depth: 7, name: 'Atalaya de la Copa' },
-      { x: -3, z: -70, top: 43.7, width: 10, depth: 8, name: 'Rama del Trueno' },
-      { x: 2, z: -74, top: 45.5, width: 8, depth: 7, name: 'Rama del Aire' },
-      { x: 6, z: -78, top: 47.4, width: 12, depth: 9, name: 'Antesala de la Fortaleza', style: 'wood' },
-      { x: 3, z: -85, top: 49.1, width: 10, depth: 8, name: 'Puente Final', style: 'wood' },
-      { x: 0, z: -92, top: 50.5, width: 31, depth: 25, style: 'wood', name: 'Fortaleza de Chatarra' },
-    ];
-    [...lowerCanopy, ...middleCanopy, ...highCanopy].forEach((platform) => this.addPlatform({ ...platform, floating: true }));
-
-    // Plataformas laterales para exploración y vigías, además de la ruta principal.
-    this.addPlatform({ x: 24, z: 2, top: 5.8, width: 6, depth: 6, style: 'wood', name: 'Torre Vigía', floating: true });
-    this.addPlatform({ x: -28, z: -20, top: 13.8, width: 6, depth: 6, style: 'wood', name: 'Torre Vigía', floating: true });
-    this.addPlatform({ x: 26, z: -49, top: 34.7, width: 7, depth: 7, style: 'wood', name: 'Torre Vigía', floating: true });
-    this.addPlatform({ x: -18, z: -34, top: 27.1, width: 8, depth: 7, name: 'Rama Escondida', floating: true });
-
-    const bridgePoints = [
-      [new THREE.Vector3(-4, 3.0, 19), new THREE.Vector3(0, 4.5, 16)],
-      [new THREE.Vector3(5, 5.2, 16), new THREE.Vector3(9, 7.0, 13)],
-      [new THREE.Vector3(14, 8.2, 10), new THREE.Vector3(10, 11.2, 5)],
-      [new THREE.Vector3(5, 12.2, 4), new THREE.Vector3(-1, 13.2, 0)],
-      [new THREE.Vector3(-5, 14.0, -1), new THREE.Vector3(-11, 16.9, -6)],
-      [new THREE.Vector3(-13, 18.1, -12), new THREE.Vector3(-20, 21.0, -17)],
-      [new THREE.Vector3(-18, 22.0, -20), new THREE.Vector3(-7, 25.0, -20)],
-      [new THREE.Vector3(-2, 26.0, -22), new THREE.Vector3(6, 28.2, -31)],
-      [new THREE.Vector3(11, 29.2, -38), new THREE.Vector3(17, 32.6, -44)],
-      [new THREE.Vector3(16, 33.7, -46), new THREE.Vector3(8, 35.4, -50)],
-      [new THREE.Vector3(7, 36.3, -51), new THREE.Vector3(4, 37.3, -54)],
-      [new THREE.Vector3(2, 38.3, -56), new THREE.Vector3(-2, 39.2, -59)],
-      [new THREE.Vector3(-3, 40.3, -61), new THREE.Vector3(-4, 41.2, -65)],
-      [new THREE.Vector3(-4, 42.3, -67), new THREE.Vector3(-3, 43.3, -70)],
-      [new THREE.Vector3(-1, 44.6, -72), new THREE.Vector3(2, 45.1, -74)],
-      [new THREE.Vector3(3, 46.1, -76), new THREE.Vector3(5, 47.0, -78)],
-      [new THREE.Vector3(5, 48.0, -81), new THREE.Vector3(3, 48.8, -85)],
-      [new THREE.Vector3(2, 49.5, -88), new THREE.Vector3(1, 50.1, -86)],
-    ];
-    bridgePoints.forEach(([a, b], index) => {
-      const log = cylinderBetween(a, b, .38, .57, this.materials.barkLight, 8);
-      this.scene.add(log);
-      for (let knot = 0; knot < 4; knot += 1) {
-        const t = (knot + 1) / 5;
-        const point = a.clone().lerp(b, t);
-        const vine = new THREE.Mesh(new THREE.TorusGeometry(.38, .06, 5, 9), this.materials.vine);
-        vine.position.copy(point);
-        vine.rotation.x = Math.PI / 2;
-        this.scene.add(vine);
-      }
-      this.animated.push({ type: 'bridge', object: log, phase: index });
+    [...mainRoute, ...sidePlatforms].forEach((platform) => this.addPlatform({ ...platform, floating: true }));
+    this.mainRouteIds = mainRoute.map((platform) => platform.id);
+    for (let index = 0; index < this.mainRouteIds.length - 1; index += 1) {
+      this.addRouteBridge(this.mainRouteIds[index], this.mainRouteIds[index + 1], index);
+    }
+    // Tres desvíos opcionales, también unidos por troncos físicos y no por saltos ambiguos.
+    [['perch', 'lookoutTower'], ['amber', 'hiddenNest'], ['knot', 'skyTower']].forEach(([fromId, toId], index) => {
+      this.addRouteBridge(fromId, toId, this.mainRouteIds.length + index);
     });
+  }
 
-    // Lianas verticales señalan la subida entre cada bioma.
-    [[4, 7, 10], [-10, 10, -4], [5, 18, -27], [4, 29, -47], [-2, 40, -65], [3, 46, -78]].forEach(([x, y, z], index) => {
+  createClimbingVines() {
+    // Lianas reales y separadas de las plataformas: se pueden usar para la escalada automática.
+    const vineData = [
+      { x: 4, z: 10, bottom: .2, top: 10.4 }, { x: -12, z: -16, bottom: 8.5, top: 21.0 },
+      { x: 3, z: -22, bottom: 15.5, top: 29.2 }, { x: 23, z: -55, bottom: 24.0, top: 37.5 },
+      { x: -21, z: -70, bottom: 33.0, top: 45.3 }, { x: -4, z: -84, bottom: 41.5, top: 52.0 },
+    ];
+    vineData.forEach((data, index) => {
+      const bend = index % 2 ? .48 : -.48;
       const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(x, y - 7, z), new THREE.Vector3(x + (index % 2 ? .7 : -.7), y - 3.5, z + .4), new THREE.Vector3(x, y + 1, z),
+        new THREE.Vector3(data.x, data.bottom, data.z),
+        new THREE.Vector3(data.x + bend, (data.bottom + data.top) * .5, data.z + .24),
+        new THREE.Vector3(data.x, data.top, data.z),
       ]);
-      const vine = new THREE.Mesh(new THREE.TubeGeometry(curve, 18, .10, 5, false), this.materials.vine);
+      const vine = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, .13, 5, false), this.materials.vine);
       vine.castShadow = true;
       this.scene.add(vine);
+      const anchor = new THREE.Mesh(new THREE.DodecahedronGeometry(.62, 0), this.materials.leafLight);
+      anchor.position.set(data.x, data.top + .18, data.z);
+      anchor.scale.set(1.2, .52, 1.0);
+      anchor.castShadow = true;
+      this.scene.add(anchor);
+      const climbable = { ...data, radius: .36, group: vine, name: `Liana ${index + 1}` };
+      this.climbables.push(climbable);
+      this.climbingVines.push(climbable);
     });
   }
 
   createThermals() {
+    // Las térmicas quedan al lado de las plataformas de salida, nunca atravesándolas.
     const thermalData = [
-      { x: 2, z: 11, bottom: .1, top: 13, radius: 4.4, strength: 19 },
-      { x: -7, z: -5, bottom: 1, top: 25, radius: 4.8, strength: 21 },
-      { x: 4, z: -27, bottom: 8, top: 36, radius: 5.0, strength: 23 },
-      { x: 4, z: -54, bottom: 20, top: 46, radius: 6.1, strength: 24 },
-      { x: 1, z: -77, bottom: 34, top: 59, radius: 5.4, strength: 26 },
-      { x: 21, z: -42, bottom: 23, top: 39, radius: 4.2, strength: 20 },
+      { id: 'brisa-baja', x: 26, z: -1, bottom: .2, top: 13, radius: 3.2, strength: 20 },
+      { id: 'ambar', x: -17, z: -3, bottom: 5, top: 25, radius: 3.5, strength: 22 },
+      { id: 'copa', x: 11, z: -25, bottom: 12, top: 35, radius: 4.0, strength: 23 },
+      { id: 'nubes', x: 32, z: -55, bottom: 21, top: 44, radius: 3.8, strength: 25 },
+      { id: 'cumbre', x: -6, z: -80, bottom: 35, top: 58, radius: 2.8, strength: 27 },
     ];
     thermalData.forEach((data, index) => this.addThermal(data, index));
   }
@@ -464,23 +515,44 @@ export class World {
   }
 
   createCollectibles() {
-    const seeds = [
-      { id: 'dawn', title: 'Bellota Solar del Alba', x: 10, y: 8.5, z: 12, checkpoint: new THREE.Vector3(10, 8.5, 15) },
-      { id: 'ember', title: 'Bellota Solar de Brasa', x: -15, y: 18.8, z: -8, checkpoint: new THREE.Vector3(-15, 18.6, -4) },
-      { id: 'sky', title: 'Bellota Solar del Cielo', x: 11, y: 30.1, z: -34, checkpoint: new THREE.Vector3(11, 29.9, -29) },
+    // Todos los objetos se anclan a IDs de plataforma: cambiar la ruta no los deja suspendidos.
+    const seedPlan = [
+      { id: 'dawn', title: 'Bellota Solar del Alba', platform: 'dawn', offsetX: -1.0, offsetZ: .25, checkpointOffsetZ: -1.25 },
+      { id: 'ember', title: 'Bellota Solar de Brasa', platform: 'amber', offsetX: .95, offsetZ: .45, checkpointOffsetZ: -1.3 },
+      { id: 'sky', title: 'Bellota Solar del Cielo', platform: 'windCrown', offsetX: -1.15, offsetZ: .15, checkpointOffsetZ: 1.3 },
     ];
-    seeds.forEach((seed, index) => this.addSolarSeed(seed, index));
+    seedPlan.forEach((seed, index) => {
+      const position = this.getPlatformPoint(seed.platform, seed.offsetX, seed.offsetZ, 1.15);
+      const checkpoint = this.getPlatformPoint(seed.platform, 0, seed.checkpointOffsetZ, .3);
+      this.addSolarSeed({ ...seed, x: position.x, y: position.y, z: position.z, checkpoint }, index);
+    });
 
-    const fruitData = [
-      [4, 6.0, 18], [-7, 3.9, 19], [2, 5.9, 16], [16, 8.4, 14], [13, 8.4, 8], [7, 12.8, 4], [-6, 16.7, -3], [-20, 20.5, -10], [-14, 25.0, -20], [-5, 26.7, -20], [5, 30, -30], [15, 30, -36], [19, 34.5, -45], [4, 39.0, -54], [-4, 42.9, -62], [-3, 45.0, -70], [6, 48.7, -78], [2, 51.8, -87],
+    const fruitPlan = [
+      ['roots', 1.05, .35], ['moss', -.95, -.45], ['dawn', 1.25, -1.05], ['perch', 1.2, -.7],
+      ['emerald', 1.15, -.95], ['hummingbird', -.9, .55], ['vineBridge', 1.2, .75], ['windNest', -1.3, .65],
+      ['amber', -1.1, 1.15], ['fern', .95, -.55], ['breeze', -1.0, .5], ['windCrown', 1.6, -1.1],
+      ['hawk', -1.35, .6], ['knot', 1.25, .75], ['mistCrest', -1.35, .95], ['cloudStep', .95, -.5],
+      ['mistStep', -1.0, .55], ['lookoutCrown', .85, -1.0], ['thunder', -1.3, .55], ['air', .9, -1.0],
+      ['antechamber', -1.4, .95], ['finalBridge', .95, -.55], ['hiddenNest', -1.05, .55], ['skyTower', 1.05, -.65],
     ];
-    fruitData.forEach(([x, y, z], index) => this.addFruit(x, y, z, index));
+    fruitPlan.forEach(([platformId, offsetX, offsetZ], index) => {
+      const position = this.getPlatformPoint(platformId, offsetX, offsetZ, .82);
+      this.addFruit(position.x, position.y, position.z, index, platformId);
+    });
 
-    // Los racimos marrones son munición; no cuentan como Bellotas Solares.
-    const ammoData = [
-      [-6, 3.7, 20], [-1, 6.0, 17], [16, 8.4, 15], [19, 10.8, 8], [7, 12.8, 3], [-6, 16.7, -4], [-23, 22.8, -18], [-14, 25.0, -21], [3, 28.5, -27], [19, 32.2, -38], [17, 34.5, -45], [4, 39.0, -54], [-4, 42.9, -62], [-2, 45.0, -70], [6, 48.7, -78], [0, 51.8, -84],
+    // Racimos de bellotas pequeñas: munición de los ataques a distancia, no objetivos principales.
+    const ammoPlan = [
+      ['roots', -1.25, .7], ['moss', 1.2, .75], ['dawn', 1.35, 1.0], ['lookoutTower', 1.0, -.8],
+      ['emerald', 1.25, 1.0], ['hummingbird', 1.15, -.75], ['vineBridge', -1.25, -.85], ['windNest', .25, -1.05],
+      ['hiddenNest', 1.1, -.7], ['fern', -1.15, .65], ['breeze', 1.05, -.65], ['windCrown', .1, 1.45],
+      ['hawk', 1.0, -1.0], ['knot', -.4, -1.0], ['mistCrest', .45, -1.3], ['cloudStep', -1.1, .65],
+      ['mistStep', 1.0, -.65], ['lookoutCrown', -1.3, .85], ['thunder', .75, -1.1], ['air', -1.25, .85],
+      ['antechamber', 1.2, -.9], ['finalBridge', -1.2, .55],
     ];
-    ammoData.forEach(([x, y, z], index) => this.addAmmoPack(x, y, z, index, 5));
+    ammoPlan.forEach(([platformId, offsetX, offsetZ], index) => {
+      const position = this.getPlatformPoint(platformId, offsetX, offsetZ, .56);
+      this.addAmmoPack(position.x, position.y, position.z, index, 5, platformId);
+    });
   }
 
   addSolarSeed(data, index) {
@@ -517,7 +589,7 @@ export class World {
     this.collectibles.push({ ...data, group, collected: false, baseY: data.y, phase: index * 2.1, light });
   }
 
-  addFruit(x, y, z, index) {
+  addFruit(x, y, z, index, platformId = null) {
     const group = new THREE.Group();
     const fruit = new THREE.Mesh(new THREE.SphereGeometry(.34, 7, 6), new THREE.MeshStandardMaterial({ color: index % 2 ? '#ee704f' : '#ffbd4a', emissive: index % 2 ? '#722418' : '#754014', emissiveIntensity: .35, flatShading: true, roughness: .7 }));
     fruit.scale.y = 1.16;
@@ -528,10 +600,10 @@ export class World {
     group.add(fruit, leaf);
     group.position.set(x, y, z);
     this.scene.add(group);
-    this.fruits.push({ group, position: group.position, collected: false, baseY: y, phase: index * .8 });
+    this.fruits.push({ group, position: group.position, platformId, collected: false, baseY: y, phase: index * .8 });
   }
 
-  addAmmoPack(x, y, z, index, amount = 5) {
+  addAmmoPack(x, y, z, index, amount = 5, platformId = null) {
     const group = new THREE.Group();
     const shellMaterial = new THREE.MeshStandardMaterial({ color: '#9b592d', roughness: .86, flatShading: true });
     const capMaterial = new THREE.MeshStandardMaterial({ color: '#d59647', roughness: .8, flatShading: true });
@@ -554,7 +626,7 @@ export class World {
     group.add(halo);
     group.position.set(x, y, z);
     this.scene.add(group);
-    this.ammoPacks.push({ group, position: group.position, amount, collected: false, baseY: y, phase: index * .61 });
+    this.ammoPacks.push({ group, position: group.position, platformId, amount, collected: false, baseY: y, phase: index * .61 });
   }
 
   createAltar() {
@@ -593,34 +665,52 @@ export class World {
   }
 
   createFortress() {
+    const fortress = this.getPlatform('fortress');
     const group = new THREE.Group();
-    const deckY = 51.05;
+    const deckY = fortress.top;
     const junkMaterials = [this.materials.wood, this.materials.barkLight, this.materials.stone];
-    for (let index = 0; index < 18; index += 1) {
-      const junk = new THREE.Mesh(index % 3 ? new THREE.BoxGeometry(1.2, 1.2, .8) : new THREE.CylinderGeometry(.5, .65, 1.8, 7), junkMaterials[index % junkMaterials.length]);
-      const angle = index / 18 * Math.PI * 2;
-      const radius = 10.5 + (index % 3) * 1.2;
-      junk.position.set(Math.cos(angle) * radius, deckY + .7 + (index % 2) * .5, Math.sin(angle) * radius);
-      junk.rotation.set(index * .3, index * .7, index * .2);
+    // Restos de la fortaleza ordenados en su perímetro; el centro queda como arena del jefe.
+    const junkPlan = [
+      [-12.8, 5.5, .7, 'crate'], [-9.8, 5.5, 1.05, 'drum'], [12.8, 5.5, .7, 'crate'], [9.8, 5.5, 1.05, 'drum'],
+      [-13.2, 1.8, .8, 'drum'], [13.2, 1.8, .8, 'crate'], [-12.5, -4.8, .8, 'crate'], [12.5, -4.8, .85, 'drum'],
+      [-7.2, -6.1, .7, 'crate'], [7.2, -6.1, .75, 'crate'], [-14.0, -1.8, .65, 'drum'], [14.0, -1.8, .65, 'drum'],
+    ];
+    junkPlan.forEach(([x, z, scale, type], index) => {
+      const junk = new THREE.Mesh(type === 'drum' ? new THREE.CylinderGeometry(.5, .65, 1.8, 7) : new THREE.BoxGeometry(1.2, 1.2, .8), junkMaterials[index % junkMaterials.length]);
+      const objectHeight = (type === 'drum' ? 1.8 : 1.2) * scale;
+      junk.position.set(x, deckY + objectHeight / 2, z);
+      junk.scale.setScalar(scale);
+      junk.rotation.set(index % 2 ? .16 : -.12, index * .7, index % 3 ? .08 : -.14);
       junk.castShadow = true;
       group.add(junk);
-    }
+    });
     for (const x of [-11, 11]) {
       const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.45, 8, 6), this.materials.wood);
-      tower.position.set(x, deckY + 3.8, -2);
+      tower.position.set(x, deckY + 4, 4.1);
       tower.castShadow = true;
       group.add(tower);
       const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.2), new THREE.MeshBasicMaterial({ color: '#d44f3e', side: THREE.DoubleSide }));
-      flag.position.set(x + .7, deckY + 7.1, -2);
+      flag.position.set(x + .7, deckY + 7.3, 4.1);
       flag.rotation.y = Math.PI / 2;
       group.add(flag);
       this.animated.push({ type: 'flag', object: flag, phase: x });
     }
-    const gate = new THREE.Mesh(new THREE.BoxGeometry(6.4, 4.4, .7), new THREE.MeshStandardMaterial({ color: '#403a39', roughness: .8, metalness: .35, flatShading: true }));
-    gate.position.set(0, deckY + 2, -10.5);
-    gate.castShadow = true;
-    group.add(gate);
-    group.position.set(0, 0, -92);
+    // Portal abierto al norte, en el lado por el que se llega desde el último puente.
+    const gateMaterial = new THREE.MeshStandardMaterial({ color: '#403a39', roughness: .8, metalness: .35, flatShading: true });
+    for (const x of [-3.15, 3.15]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(.62, 4.4, .7), gateMaterial);
+      post.position.set(x, deckY + 2.2, 7.25);
+      post.castShadow = true;
+      group.add(post);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(6.9, .65, .78), gateMaterial);
+    lintel.position.set(0, deckY + 4.08, 7.25);
+    lintel.castShadow = true;
+    group.add(lintel);
+    const banner = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.4), new THREE.MeshBasicMaterial({ color: '#c95042', side: THREE.DoubleSide }));
+    banner.position.set(0, deckY + 5.3, 7.62);
+    group.add(banner);
+    group.position.set(fortress.x, 0, fortress.z);
     this.scene.add(group);
   }
 
@@ -685,21 +775,37 @@ export class World {
   getLandingHeight(x, z, previousY) {
     let height = this.terrainHeight(x, z);
     for (const platform of this.platforms) {
-      const isOverPlatform = Math.abs(x - platform.x) <= platform.width / 2 + .68
-        && Math.abs(z - platform.z) <= platform.depth / 2 + .68;
-      // Antes solo se reconocía la franja superior de 0.7 unidades. Con el salto,
-      // planeo y la cámara táctil era posible ver a la ardilla sobre una plataforma
-      // pero perder el suelo. Toda la base y un margen de aterrizaje cuentan ahora.
+      // Margen mínimo de borde; los huecos se cubren con pasarelas físicas a la misma altura visible.
+      const isOverPlatform = Math.abs(x - platform.x) <= platform.width / 2 + .1
+        && Math.abs(z - platform.z) <= platform.depth / 2 + .1;
+      // Toda la base y un margen de aterrizaje cuentan para evitar atravesar escalones altos.
       const canCatchPlayer = previousY >= platform.top - platform.landingDepth;
       if (isOverPlatform && canCatchPlayer) height = Math.max(height, platform.top);
+    }
+    // Los troncos entre plataformas son pasarelas físicas, no decoración engañosa.
+    for (const walkway of this.walkways) {
+      const dx = walkway.end.x - walkway.start.x;
+      const dz = walkway.end.z - walkway.start.z;
+      const lengthSq = dx * dx + dz * dz;
+      if (lengthSq < .001) continue;
+      const progress = clamp(((x - walkway.start.x) * dx + (z - walkway.start.z) * dz) / lengthSq, 0, 1);
+      const closestX = walkway.start.x + dx * progress;
+      const closestZ = walkway.start.z + dz * progress;
+      const distance = Math.hypot(x - closestX, z - closestZ);
+      const walkwayY = THREE.MathUtils.lerp(walkway.start.y, walkway.end.y, progress);
+      if (distance <= walkway.radius && previousY >= walkwayY - walkway.landingDepth) {
+        height = Math.max(height, walkwayY);
+      }
     }
     return height;
   }
 
   constrainPosition(position, radius = .45) {
     position.x = clamp(position.x, -102, 102);
-    position.z = clamp(position.z, -103, 103);
+    // La fortaleza ocupa hasta z=-109; el límite conserva su arena dentro del terreno visible.
+    position.z = clamp(position.z, -110, 103);
     for (const tree of this.climbables) {
+      if (!tree.solid) continue;
       const dx = position.x - tree.x;
       const dz = position.z - tree.z;
       const distance = Math.hypot(dx, dz);

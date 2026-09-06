@@ -18,6 +18,7 @@ npm run dev
 Vite imprimirá la URL local. Para generar la versión de producción:
 
 ```bash
+npm run validate:layout  # comprueba solapes y superficies físicas del recorrido
 npm run build
 npm run preview
 ```
@@ -41,7 +42,7 @@ npm run preview
 
 - Ardilla voladora low-poly con carrera, salto, escalada automática en troncos, patagios animados, inercia de vuelo, resistencia y Glide Dash.
 - Corrientes térmicas verticales que impulsan el planeo hacia el dosel alto.
-- Mundo vertical en tres estratos: suelo, dosel medio y copa alta; una ruta extendida de plataformas, lianas, puentes, térmicas, desvíos y una fortaleza mucho más lejana.
+- Mundo vertical en tres estratos: suelo, dosel medio y copa alta; una ruta extendida de plataformas, lianas, puentes, térmicas, desvíos y una fortaleza mucho más lejana. Las plataformas, árboles, lianas y térmicas del recorrido están colocados desde un plano autoritativo, con pasarelas físicas entre cada tramo.
 - Tres **Bellotas Solares** coleccionables (los objetivos de misión), frutos que recuperan resistencia y racimos de **Bellotas Pequeñas** que rellenan la munición.
 - Vigías mapache que disparan con tirachinas, mapaches pesados protegidos por escudo y el Rey Mapache en su robot de chatarra.
 - Combate accesible: el giro estilo arcade derrota vigías cercanos, las Bellotas Pequeñas hacen daño a distancia y un Glide Dash sigue siendo el golpe eficaz para el motor del jefe.
@@ -57,7 +58,7 @@ src/
 ├── style.css
 └── game/
     ├── Game.js       # bucle principal, render y cámara
-    ├── World.js      # bioma procedural, plataformas y coleccionables
+    ├── World.js      # bioma low-poly, plano espacial y coleccionables
     ├── Player.js     # controlador de la ardilla y física arcade
     ├── Enemies.js    # IA, proyectiles y jefe
     ├── Input.js      # teclado, joystick, botones y cámara táctil

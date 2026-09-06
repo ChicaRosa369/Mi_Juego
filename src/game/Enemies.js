@@ -39,15 +39,17 @@ export class EnemySystem {
   }
 
   buildEncounters() {
-    // Patrullas distribuidas por la ruta extendida del dosel.
-    [
-      [24, 6.05, 2], [18, 10.2, 8], [-28, 14.05, -20], [-23, 22.4, -18],
-      [15, 30.0, -36], [26, 35.2, -49], [-3, 44.5, -70],
-    ].forEach(([x, y, z]) => this.addEnemy('lookout', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
-    [
-      [12.8, 7.9, 11], [-12.5, 18.2, -7], [7, 29.6, -31],
-      [4, 38.4, -54], [-3, 44.5, -70], [5, 48.4, -78],
-    ].forEach(([x, y, z]) => this.addEnemy('heavy', new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, z)));
+    // Encuentros anclados a plataformas concretas: cada mapache tiene suelo y zona de patrulla.
+    const lookoutPlan = [
+      ['perch', -1.35, .8], ['lookoutTower', -1.15, .9], ['windNest', 1.45, 1.0], ['hawk', 1.45, 1.0],
+      ['knot', -1.5, 1.0], ['lookoutCrown', 1.4, 1.0], ['air', 1.45, 1.0], ['skyTower', -1.1, .8],
+    ];
+    lookoutPlan.forEach(([platformId, offsetX, offsetZ]) => this.addEnemy('lookout', platformId, offsetX, offsetZ));
+    const heavyPlan = [
+      ['emerald', -1.2, -.8], ['amber', -1.25, -1.1], ['windCrown', 1.8, .8],
+      ['mistCrest', 1.4, .65], ['thunder', 1.45, 1.0], ['antechamber', 1.8, .9],
+    ];
+    heavyPlan.forEach(([platformId, offsetX, offsetZ]) => this.addEnemy('heavy', platformId, offsetX, offsetZ));
     this.createBoss();
   }
 
@@ -145,14 +147,17 @@ export class EnemySystem {
     return { root, visual, tail, leftArm, rightArm, shield, alert };
   }
 
-  addEnemy(type, position, home) {
+  addEnemy(type, platformId, offsetX = 0, offsetZ = 0) {
+    const platform = this.world.getPlatform(platformId);
+    const position = this.world.getPlatformPoint(platformId, offsetX, offsetZ, .02);
     const model = this.buildRaccoon(type);
     model.root.position.copy(position);
     this.scene.add(model.root);
     const enemy = {
       type,
       position: model.root.position,
-      home: home.clone(),
+      home: position.clone(),
+      platform,
       model,
       alive: true,
       health: type === 'heavy' ? 2 : 1,
@@ -180,6 +185,7 @@ export class EnemySystem {
   }
 
   createBoss() {
+    const fortress = this.world.getPlatform('fortress');
     const root = new THREE.Group();
     const metal = this.raccoonMaterials.metal;
     const darkMetal = new THREE.MeshStandardMaterial({ color: '#32444b', roughness: .6, metalness: .62, flatShading: true });
@@ -245,11 +251,13 @@ export class EnemySystem {
     const warning = new THREE.PointLight('#ff663f', 1.3, 10, 2);
     warning.position.set(0, 3.5, 1);
     root.add(warning);
-    root.position.set(0, 50.5, -92);
+    // El Rey ocupa el centro despejado de la plataforma de fortaleza, no una coordenada suelta.
+    root.position.copy(this.world.getPlatformPoint('fortress', 0, -1.35, .02));
     this.scene.add(root);
     this.boss = {
       root,
       position: root.position,
+      floorY: fortress.top + .02,
       core,
       wheels,
       warning,
@@ -346,6 +354,8 @@ export class EnemySystem {
     this.time += delta;
     for (const enemy of this.enemies) {
       if (!enemy.alive) continue;
+      // Los vigías y pesados permanecen sobre la plataforma que los aloja.
+      enemy.position.y = enemy.platform.top + .02;
       const distance = horizontalDistance(enemy.position, player.position);
       const verticalDistance = Math.abs(enemy.position.y - player.position.y);
       enemy.cooldown -= delta;
@@ -379,13 +389,19 @@ export class EnemySystem {
           model.root.rotation.y += delta * .23;
         }
       } else {
-        const inRange = distance < 13 && verticalDistance < 4;
+        const patrol = enemy.platform;
+        const playerOnPatrol = Math.abs(player.position.x - patrol.x) <= patrol.width / 2 + .4
+          && Math.abs(player.position.z - patrol.z) <= patrol.depth / 2 + .4;
+        const inRange = playerOnPatrol && distance < 11 && verticalDistance < 3.2;
         const target = inRange ? player.position : enemy.home;
         const direction = target.clone().sub(enemy.position).setY(0);
         if (direction.lengthSq() > .4) {
           direction.normalize();
           const amount = (inRange ? enemy.speed : enemy.speed * .35) * delta;
           enemy.position.addScaledVector(direction, amount);
+          // Nunca persiguen a través de un hueco: quedan dentro de su plataforma.
+          enemy.position.x = THREE.MathUtils.clamp(enemy.position.x, patrol.x - patrol.width / 2 + .62, patrol.x + patrol.width / 2 - .62);
+          enemy.position.z = THREE.MathUtils.clamp(enemy.position.z, patrol.z - patrol.depth / 2 + .62, patrol.z + patrol.depth / 2 - .62);
           const angle = Math.atan2(direction.x, direction.z);
           model.root.rotation.y = dampAngle(model.root.rotation.y, angle, 7, delta);
         }
@@ -433,7 +449,7 @@ export class EnemySystem {
     } else if (boss.collapse > 0) {
       boss.collapse -= delta;
       boss.root.rotation.z += delta * .52;
-      boss.root.position.y = Math.max(50.5, boss.root.position.y - delta * 2.7);
+      boss.root.position.y = Math.max(boss.floorY, boss.root.position.y - delta * 2.7);
     }
   }
 

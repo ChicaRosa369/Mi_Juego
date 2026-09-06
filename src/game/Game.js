@@ -121,7 +121,8 @@ export class CanopyGlideGame {
     this.scene.add(rim);
 
     this.world = new World(this.scene);
-    const spawn = new THREE.Vector3(0, this.world.terrainHeight(0, 23), 23);
+    // El viaje comienza sobre la primera plataforma diseñada, no debajo de una estructura flotante.
+    const spawn = this.world.getPlatformPoint('roots', 0, .2, .03);
     this.player = new Player(this.scene, spawn, {
       onEvent: (event) => this.handlePlayerEvent(event),
       onDamage: (health, previous) => {
@@ -260,7 +261,7 @@ export class CanopyGlideGame {
     else if (this.seeds === 1) this.hud.setObjective('Encuentra la Bellota de Brasa en el Dosel Medio.');
     else if (this.seeds === 2) this.hud.setObjective('Atravesa los vientos de la Copa Alta por la última Bellota.');
     else if (this.enemies.boss.active) this.hud.setObjective('Daña el motor del Rey con ataques en picado.');
-    else this.hud.setObjective('Planea hacia la Fortaleza de Chatarra, al norte del Gran Árbol.');
+    else this.hud.setObjective('Sigue el dosel alto hasta la Fortaleza de Chatarra.');
   }
 
   updateCamera(delta, snap = false) {
